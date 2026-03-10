@@ -49,6 +49,24 @@
     </section>
 
     <section class="panel">
+      <div class="filter-row split">
+        <strong>Recent 7-Day Review Trend</strong>
+        <span class="hint">按任务维度统计 ready / partial / pending</span>
+      </div>
+      <div class="trend-grid">
+        <div v-for="row in reviewTrendRows" :key="row.date" class="trend-row">
+          <div class="trend-date">{{ row.date }}</div>
+          <div class="trend-bar">
+            <span class="trend-segment ready" :style="{ width: segmentWidth(row, 'ready') }"></span>
+            <span class="trend-segment partial" :style="{ width: segmentWidth(row, 'partial') }"></span>
+            <span class="trend-segment pending" :style="{ width: segmentWidth(row, 'pending') }"></span>
+          </div>
+          <div class="trend-meta">R {{ row.ready }} · P {{ row.partial }} · N {{ row.pending }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
       <div v-if="loading" class="hint">Loading reviews...</div>
       <div v-else-if="filteredTasks.length === 0" class="hint">当前暂无可复盘任务</div>
       <table v-else class="data-table">
@@ -155,6 +173,54 @@ const totalTasks = computed(() => tasks.value.length);
 const readyCount = computed(() => statusCounts.value.ready ?? 0);
 const partialCount = computed(() => statusCounts.value.partial ?? 0);
 const pendingCount = computed(() => Math.max(0, totalTasks.value - readyCount.value - partialCount.value));
+const reviewTrendRows = computed(() => {
+  const buckets: Record<string, { date: string; ready: number; partial: number; pending: number; total: number }> = {};
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    const key = dayKey(date);
+    buckets[key] = {
+      date: key,
+      ready: 0,
+      partial: 0,
+      pending: 0,
+      total: 0
+    };
+  }
+
+  for (const task of tasks.value) {
+    const source = task.finished_at || task.created_at;
+    if (!source) {
+      continue;
+    }
+
+    const date = new Date(source);
+    if (Number.isNaN(date.getTime())) {
+      continue;
+    }
+    date.setHours(0, 0, 0, 0);
+    const key = dayKey(date);
+    const bucket = buckets[key];
+    if (!bucket) {
+      continue;
+    }
+
+    const status = reviewStatusOf(task.id);
+    if (status === "ready") {
+      bucket.ready += 1;
+    } else if (status === "partial") {
+      bucket.partial += 1;
+    } else {
+      bucket.pending += 1;
+    }
+    bucket.total += 1;
+  }
+
+  return Object.values(buckets);
+});
 
 onMounted(async () => {
   if (!sessionState.token) {
@@ -264,6 +330,24 @@ function metricString(metrics: Record<string, unknown> | undefined, key: string)
 
 function metricBoolean(metrics: Record<string, unknown> | undefined, key: string) {
   return metrics?.[key] === true;
+}
+
+function dayKey(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function segmentWidth(
+  row: { ready: number; partial: number; pending: number; total: number },
+  status: "ready" | "partial" | "pending"
+) {
+  if (row.total <= 0) {
+    return "0%";
+  }
+  const value = row[status];
+  return `${Math.max(0, Math.min(100, (value / row.total) * 100))}%`;
 }
 
 function formatDate(value?: string | null) {

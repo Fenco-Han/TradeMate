@@ -226,6 +226,49 @@ a {
   margin-top: 12px;
 }
 
+.trend-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 190px;
+  align-items: center;
+  gap: 10px;
+}
+
+.trend-date {
+  color: #243b53;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trend-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e4e7eb;
+}
+
+.trend-segment.ready {
+  background: #84cc16;
+}
+
+.trend-segment.partial {
+  background: #f59e0b;
+}
+
+.trend-segment.pending {
+  background: #94a3b8;
+}
+
+.trend-meta {
+  font-size: 12px;
+  color: #486581;
+}
+
 button.small {
   padding: 6px 10px;
   font-size: 13px;
@@ -294,5 +337,10 @@ button {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
+  }
+
+  .trend-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
