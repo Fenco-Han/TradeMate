@@ -91,13 +91,39 @@
         <div v-else-if="activeTab === 'suggestions'" class="tab-pane">
           <div class="row">
             <h3>Pending Suggestions</h3>
-            <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
+            <div class="actions-inline">
+              <button class="small secondary" :disabled="loading" @click="toggleSelectAllSuggestions">
+                {{ allSuggestionsSelected ? "Clear Select" : "Select All" }}
+              </button>
+              <button
+                class="small"
+                :disabled="loading || selectedSuggestionIDs.length === 0"
+                @click="batchApproveSuggestions"
+              >
+                Batch Approve ({{ selectedSuggestionIDs.length }})
+              </button>
+              <button
+                class="small secondary"
+                :disabled="loading || selectedSuggestionIDs.length === 0"
+                @click="batchRejectSuggestions"
+              >
+                Batch Reject ({{ selectedSuggestionIDs.length }})
+              </button>
+              <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
+            </div>
           </div>
           <p v-if="settings.show_high_risk_only" class="meta">当前仅展示高风险建议</p>
           <ul class="popup-list">
             <li v-for="item in displaySuggestions" :key="item.id">
               <div class="row">
-                <strong>{{ item.title }}</strong>
+                <div class="suggestion-row">
+                  <input
+                    type="checkbox"
+                    :checked="selectedSuggestionIDs.includes(item.id)"
+                    @change="toggleSuggestion(item.id)"
+                  />
+                  <strong>{{ item.title }}</strong>
+                </div>
                 <span :class="['risk-pill', item.risk_level]">{{ item.risk_level }}</span>
               </div>
               <p>{{ item.reason_summary }}</p>
@@ -241,6 +267,7 @@ const tasks = ref<Task[]>([]);
 const reviews = ref<ReviewSnapshot[]>([]);
 const notifications = ref<Notification[]>([]);
 const lastRunResults = ref<RunTaskItem[]>([]);
+const selectedSuggestionIDs = ref<string[]>([]);
 const reviewStatusCounts = ref<Record<string, number>>({
   ready: 0,
   partial: 0,
@@ -254,6 +281,11 @@ const displaySuggestions = computed(() => {
   }
   return suggestions.value;
 });
+const allSuggestionsSelected = computed(
+  () =>
+    displaySuggestions.value.length > 0 &&
+    displaySuggestions.value.every((item) => selectedSuggestionIDs.value.includes(item.id))
+);
 const topSuggestions = computed(() => displaySuggestions.value.slice(0, 5));
 const unreadNotifications = computed(
   () => notifications.value.filter((item) => !item.is_read).length
@@ -331,6 +363,9 @@ async function hydrate() {
     me.value = meResult;
     goal.value = goalResult;
     suggestions.value = suggestionsResult.list;
+    selectedSuggestionIDs.value = selectedSuggestionIDs.value.filter((id) =>
+      suggestionsResult.list.some((item) => item.id === id)
+    );
     tasks.value = tasksResult.list;
     reviews.value = reviewsResult.list;
     reviewStatusCounts.value = reviewsResult.status_counts ?? { ready: 0, partial: 0, pending: 0 };
@@ -357,6 +392,7 @@ async function approveSuggestion(suggestionID: string) {
   message.value = "";
   try {
     await extensionApi.approveSuggestion(token.value, suggestionID);
+    selectedSuggestionIDs.value = selectedSuggestionIDs.value.filter((id) => id !== suggestionID);
     message.value = "Suggestion approved";
     await hydrate();
   } catch (err) {
@@ -376,6 +412,7 @@ async function rejectSuggestion(suggestionID: string) {
   message.value = "";
   try {
     await extensionApi.rejectSuggestion(token.value, suggestionID);
+    selectedSuggestionIDs.value = selectedSuggestionIDs.value.filter((id) => id !== suggestionID);
     message.value = "Suggestion rejected";
     await hydrate();
   } catch (err) {
@@ -383,6 +420,67 @@ async function rejectSuggestion(suggestionID: string) {
   } finally {
     loading.value = false;
   }
+}
+
+async function batchApproveSuggestions() {
+  if (!token.value || selectedSuggestionIDs.value.length === 0) {
+    return;
+  }
+
+  loading.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    const result = await extensionApi.batchApproveSuggestions(token.value, {
+      suggestion_ids: selectedSuggestionIDs.value,
+      execute_immediately: true
+    });
+    message.value = `Batch approved ${result.total} suggestion(s)`;
+    selectedSuggestionIDs.value = [];
+    await hydrate();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Batch approve failed";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function batchRejectSuggestions() {
+  if (!token.value || selectedSuggestionIDs.value.length === 0) {
+    return;
+  }
+
+  loading.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    const result = await extensionApi.batchRejectSuggestions(token.value, {
+      suggestion_ids: selectedSuggestionIDs.value
+    });
+    message.value = `Batch rejected ${result.total} suggestion(s)`;
+    selectedSuggestionIDs.value = [];
+    await hydrate();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Batch reject failed";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function toggleSuggestion(suggestionID: string) {
+  if (selectedSuggestionIDs.value.includes(suggestionID)) {
+    selectedSuggestionIDs.value = selectedSuggestionIDs.value.filter((id) => id !== suggestionID);
+    return;
+  }
+  selectedSuggestionIDs.value = [...selectedSuggestionIDs.value, suggestionID];
+}
+
+function toggleSelectAllSuggestions() {
+  if (allSuggestionsSelected.value) {
+    selectedSuggestionIDs.value = [];
+    return;
+  }
+  selectedSuggestionIDs.value = displaySuggestions.value.map((item) => item.id);
 }
 
 async function cancelTask(taskID: string) {

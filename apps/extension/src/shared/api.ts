@@ -112,6 +112,23 @@ export const extensionApi = {
       body: JSON.stringify({ note: "approved from extension", execute_immediately: true })
     });
   },
+  batchApproveSuggestions(
+    token: string,
+    input: { suggestion_ids: string[]; note?: string; execute_immediately?: boolean }
+  ) {
+    return request<{ results: ApproveSuggestionResult[]; total: number }>(
+      "/agents/ad/suggestions/batch-approve",
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          suggestion_ids: input.suggestion_ids,
+          note: input.note ?? "batch approved from extension",
+          execute_immediately: input.execute_immediately ?? true
+        })
+      }
+    );
+  },
   rejectSuggestion(token: string, suggestionID: string) {
     return request<{ suggestion_id: string; status: string }>(
       `/agents/ad/suggestions/${suggestionID}/reject`,
@@ -119,6 +136,19 @@ export const extensionApi = {
       {
         method: "POST",
         body: JSON.stringify({ note: "rejected from extension" })
+      }
+    );
+  },
+  batchRejectSuggestions(token: string, input: { suggestion_ids: string[]; note?: string }) {
+    return request<{ suggestion_ids: string[]; total: number }>(
+      "/agents/ad/suggestions/batch-reject",
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          suggestion_ids: input.suggestion_ids,
+          note: input.note ?? "batch rejected from extension"
+        })
       }
     );
   },

@@ -178,6 +178,12 @@ button.secondary {
   gap: 8px;
 }
 
+.suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .actions-inline {
   justify-content: flex-end;
 }
