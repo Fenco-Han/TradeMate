@@ -38,6 +38,7 @@
             <th>Task</th>
             <th>Risk</th>
             <th>Status</th>
+            <th>Channel</th>
             <th>Retry</th>
             <th>Created</th>
             <th>Failure Reason</th>
@@ -52,6 +53,7 @@
             </td>
             <td><span :class="['risk-tag', task.risk_level]">{{ task.risk_level }}</span></td>
             <td>{{ task.status }}</td>
+            <td>{{ quickExecutionChannel(task.id) }}</td>
             <td>{{ task.retry_count }}</td>
             <td>{{ formatDate(task.created_at) }}</td>
             <td>{{ task.failure_reason || "-" }}</td>
@@ -93,6 +95,8 @@
           <p>Fallback Requested: <strong>{{ selectedDetail.execution.fallback_requested ? "yes" : "no" }}</strong></p>
           <p>Fallback Used: <strong>{{ selectedDetail.execution.fallback_used ? "yes" : "no" }}</strong></p>
           <p>Execution ID: <strong>{{ selectedDetail.execution.execution_id || "-" }}</strong></p>
+          <p>Execution Mode: <strong>{{ selectedExecutionMode }}</strong></p>
+          <p>Attempt Count: <strong>{{ selectedAttemptCount }}</strong></p>
           <p>Executed At: <strong>{{ formatDate(selectedDetail.task.executed_at) }}</strong></p>
           <p>Finished At: <strong>{{ formatDate(selectedDetail.task.finished_at) }}</strong></p>
         </article>
@@ -163,6 +167,7 @@ const riskLevel = ref<"" | RiskLevel>("");
 const selectedTaskID = ref("");
 const selectedDetail = ref<TaskDetailResponse | null>(null);
 const selectedReview = ref<ReviewSnapshot | null>(null);
+const reviewMap = ref<Record<string, ReviewSnapshot>>({});
 
 const storeName = computed(() => sessionState.me?.stores[0]?.store_name ?? "");
 const relatedAuditLogs = computed(() => {
@@ -173,6 +178,8 @@ const relatedAuditLogs = computed(() => {
     .filter((item) => item.target_type === "task" && item.target_id === selectedDetail.value?.task.id)
     .slice(0, 10);
 });
+const selectedExecutionMode = computed(() => metricString(selectedReview.value?.after_metrics, "execution_mode") || "-");
+const selectedAttemptCount = computed(() => metricNumber(selectedReview.value?.after_metrics, "execution_attempt_count") || "-");
 
 onMounted(async () => {
   if (!sessionState.token) {
@@ -202,13 +209,23 @@ async function loadTasks() {
   message.value = "";
 
   try {
-    const result = await api.listTasks({
-      status: statusFilter.value || undefined,
-      risk_level: riskLevel.value || undefined,
-      page: 1,
-      page_size: 100
-    });
-    tasks.value = result.list;
+    const [taskResult, reviewResult] = await Promise.all([
+      api.listTasks({
+        status: statusFilter.value || undefined,
+        risk_level: riskLevel.value || undefined,
+        page: 1,
+        page_size: 100
+      }),
+      api.listTaskReviews({ limit: 300 })
+    ]);
+    tasks.value = taskResult.list;
+
+    const nextReviewMap: Record<string, ReviewSnapshot> = {};
+    for (const item of reviewResult.list) {
+      nextReviewMap[item.task_id] = item;
+    }
+    reviewMap.value = nextReviewMap;
+
     if (selectedTaskID.value && !tasks.value.some((item) => item.id === selectedTaskID.value)) {
       selectedTaskID.value = "";
       selectedDetail.value = null;
@@ -309,6 +326,10 @@ async function loadTaskDetail(taskID: string) {
     const [detail, review] = await Promise.all([api.getTask(taskID), api.getTaskReview(taskID)]);
     selectedDetail.value = detail;
     selectedReview.value = review;
+    reviewMap.value = {
+      ...reviewMap.value,
+      [taskID]: review
+    };
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load task detail";
   } finally {
@@ -333,5 +354,34 @@ function summarizeEvent(raw?: string | null) {
 
 function formatJSON(value?: Record<string, unknown>) {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+function quickExecutionChannel(taskID: string) {
+  const review = reviewMap.value[taskID];
+  if (!review) {
+    return "-";
+  }
+  const executionChannel = metricString(review.after_metrics, "execution_channel");
+  if (executionChannel) {
+    return executionChannel;
+  }
+  if (metricBoolean(review.after_metrics, "fallback_requested") || metricBoolean(review.before_metrics, "fallback_requested")) {
+    return "browser_fallback(planned)";
+  }
+  return "api";
+}
+
+function metricString(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function metricNumber(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key];
+  return typeof value === "number" ? value : 0;
+}
+
+function metricBoolean(metrics: Record<string, unknown> | undefined, key: string) {
+  return metrics?.[key] === true;
 }
 </script>
