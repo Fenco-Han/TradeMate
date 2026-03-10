@@ -452,6 +452,30 @@ func (h *Handlers) GetTaskReview(c *gin.Context) {
 	respond(c, http.StatusOK, snapshot)
 }
 
+func (h *Handlers) ListTaskReviews(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	status := strings.TrimSpace(c.Query("status"))
+	limit := parseIntOrDefault(c.Query("limit"), 200)
+
+	list, err := h.repo.ListReviewSnapshots(storeID, status, limit)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	statusCounts, err := h.repo.CountReviewSnapshotsByStatus(storeID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respond(c, http.StatusOK, gin.H{
+		"list":          list,
+		"total":         len(list),
+		"status_counts": statusCounts,
+	})
+}
+
 func (h *Handlers) CancelTask(c *gin.Context) {
 	storeID := contextValue(c, ctxActiveStoreKey)
 	userID := contextValue(c, ctxUserIDKey)

@@ -766,6 +766,72 @@ LIMIT 1`, taskID, storeID)
 	return snapshot, nil
 }
 
+func (r *Repository) ListReviewSnapshots(storeID, status string, limit int) ([]models.ReviewSnapshot, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	where := []string{"store_id = ?"}
+	args := []any{storeID}
+	if strings.TrimSpace(status) != "" {
+		where = append(where, "status = ?")
+		args = append(args, status)
+	}
+
+	query := fmt.Sprintf(`
+SELECT id, agent_type, task_id, store_id, status, before_metrics_json, after_metrics_json, summary, generated_at
+FROM review_snapshot
+WHERE %s
+ORDER BY generated_at DESC
+LIMIT ?`, strings.Join(where, " AND "))
+	args = append(args, limit)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]models.ReviewSnapshot, 0)
+	for rows.Next() {
+		item, scanErr := scanReviewSnapshot(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		list = append(list, item)
+	}
+
+	return list, nil
+}
+
+func (r *Repository) CountReviewSnapshotsByStatus(storeID string) (map[string]int, error) {
+	rows, err := r.db.Query(`
+SELECT status, COUNT(1)
+FROM review_snapshot
+WHERE store_id = ?
+GROUP BY status`, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := map[string]int{
+		"ready":   0,
+		"partial": 0,
+		"pending": 0,
+	}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		counts[status] = count
+	}
+
+	return counts, nil
+}
+
 func (r *Repository) UpsertReviewSnapshot(storeID, taskID, status string, beforeMetrics, afterMetrics map[string]any, summary string) (models.ReviewSnapshot, error) {
 	if beforeMetrics == nil {
 		beforeMetrics = map[string]any{}

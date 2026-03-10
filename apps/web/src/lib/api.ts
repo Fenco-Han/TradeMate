@@ -34,6 +34,12 @@ export interface AuditLogsPayload {
   total: number;
 }
 
+export interface ReviewSnapshotsPayload {
+  list: ReviewSnapshot[];
+  total: number;
+  status_counts: Record<string, number>;
+}
+
 export interface ApproveSuggestionResult {
   approval_id: string;
   task_id: string;
@@ -200,6 +206,13 @@ export const api = {
   },
   getTaskReview(taskID: string) {
     return request<ReviewSnapshot>(`/agents/ad/reviews/${taskID}`);
+  },
+  listTaskReviews(input?: { status?: "pending" | "partial" | "ready"; limit?: number }) {
+    const query = buildQuery({
+      status: input?.status,
+      limit: input?.limit
+    });
+    return request<ReviewSnapshotsPayload>(`/agents/ad/reviews${query}`);
   },
   listNotifications(input?: { limit?: number }) {
     const query = buildQuery({

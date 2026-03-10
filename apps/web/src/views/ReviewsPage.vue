@@ -26,6 +26,24 @@
           <button :disabled="loading" @click="loadTasks">Refresh</button>
         </div>
       </div>
+      <div class="stats">
+        <article class="stat">
+          <span>Loaded Tasks</span>
+          <strong>{{ totalTasks }}</strong>
+        </article>
+        <article class="stat">
+          <span>Review Ready</span>
+          <strong>{{ readyCount }}</strong>
+        </article>
+        <article class="stat">
+          <span>Review Partial</span>
+          <strong>{{ partialCount }}</strong>
+        </article>
+        <article class="stat">
+          <span>Review Pending</span>
+          <strong>{{ pendingCount }}</strong>
+        </article>
+      </div>
       <p v-if="message" class="hint">{{ message }}</p>
       <p v-if="error" class="error">{{ error }}</p>
     </section>
@@ -103,6 +121,11 @@ const message = ref("");
 const tasks = ref<Task[]>([]);
 const reviewMap = ref<Record<string, ReviewSnapshot>>({});
 const selectedTaskID = ref("");
+const statusCounts = ref<Record<string, number>>({
+  ready: 0,
+  partial: 0,
+  pending: 0
+});
 
 const taskStatusFilter = ref<"" | TaskStatus>("");
 const reviewStatusFilter = ref<"" | "pending" | "partial" | "ready">("");
@@ -125,6 +148,11 @@ const selectedReview = computed(() => {
   }
   return reviewMap.value[selectedTaskID.value] ?? null;
 });
+
+const totalTasks = computed(() => tasks.value.length);
+const readyCount = computed(() => statusCounts.value.ready ?? 0);
+const partialCount = computed(() => statusCounts.value.partial ?? 0);
+const pendingCount = computed(() => Math.max(0, totalTasks.value - readyCount.value - partialCount.value));
 
 onMounted(async () => {
   if (!sessionState.token) {
@@ -150,18 +178,28 @@ async function loadTasks() {
   message.value = "";
 
   try {
-    const result = await api.listTasks({
-      status: taskStatusFilter.value || undefined,
-      page: 1,
-      page_size: 100
-    });
-    tasks.value = result.list;
+    const [taskResult, reviewResult] = await Promise.all([
+      api.listTasks({
+        status: taskStatusFilter.value || undefined,
+        page: 1,
+        page_size: 100
+      }),
+      api.listTaskReviews({
+        limit: 200
+      })
+    ]);
+    tasks.value = taskResult.list;
 
-    await hydrateReviews(result.list);
+    const nextMap: Record<string, ReviewSnapshot> = {};
+    for (const item of reviewResult.list) {
+      nextMap[item.task_id] = item;
+    }
+    reviewMap.value = nextMap;
+    statusCounts.value = reviewResult.status_counts ?? { ready: 0, partial: 0, pending: 0 };
 
-    if (!selectedTaskID.value && result.list.length > 0) {
-      selectTask(result.list[0].id);
-    } else if (selectedTaskID.value && !result.list.some((item) => item.id === selectedTaskID.value)) {
+    if (!selectedTaskID.value && taskResult.list.length > 0) {
+      selectTask(taskResult.list[0].id);
+    } else if (selectedTaskID.value && !taskResult.list.some((item) => item.id === selectedTaskID.value)) {
       selectedTaskID.value = "";
     }
   } catch (err) {
@@ -169,37 +207,6 @@ async function loadTasks() {
   } finally {
     loading.value = false;
   }
-}
-
-async function hydrateReviews(taskList: Task[]) {
-  const fallbackStoreID = sessionState.me?.active_store_id ?? "";
-
-  const pairs = await Promise.all(
-    taskList.map(async (task) => {
-      try {
-        const review = await api.getTaskReview(task.id);
-        return [task.id, review] as const;
-      } catch {
-        return [
-          task.id,
-          {
-            agent_type: task.agent_type,
-            task_id: task.id,
-            store_id: fallbackStoreID,
-            status: "pending",
-            before_metrics: {}
-          } satisfies ReviewSnapshot
-        ] as const;
-      }
-    })
-  );
-
-  const nextMap: Record<string, ReviewSnapshot> = {};
-  for (const [taskID, review] of pairs) {
-    nextMap[taskID] = review;
-  }
-
-  reviewMap.value = nextMap;
 }
 
 function selectTask(taskID: string) {
@@ -217,11 +224,7 @@ async function refreshSelectedReview() {
   message.value = "";
 
   try {
-    const review = await api.getTaskReview(selectedTaskID.value);
-    reviewMap.value = {
-      ...reviewMap.value,
-      [selectedTaskID.value]: review
-    };
+    await loadTasks();
     message.value = "Review refreshed";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to refresh review";

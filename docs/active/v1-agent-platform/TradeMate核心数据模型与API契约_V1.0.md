@@ -486,6 +486,16 @@
 2. `partial`：任务失败，仅有执行前快照
 3. `ready`：任务完成，执行前后快照齐全
 
+### 5.14.1 获取复盘列表
+
+`GET /api/v1/agents/ad/reviews?limit=200`
+
+返回字段：
+
+1. list
+2. total
+3. status_counts（按 `ready/partial/pending` 统计）
+
 ### 5.15 获取通知列表
 
 `GET /api/v1/notifications`
