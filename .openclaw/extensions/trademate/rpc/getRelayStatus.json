@@ -1,5 +1,4 @@
 {
   "name": "trademate.getRelayStatus",
-  "description": "Return placeholder relay health information for the active browser context."
+  "description": "Return relay attach status and page support diagnostics for a browser context."
 }
-

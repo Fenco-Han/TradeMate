@@ -1,0 +1,4 @@
+{
+  "name": "trademate.runBrowserAction",
+  "description": "Run a supported browser fallback action with validate/prepare/execute/verify flow."
+}

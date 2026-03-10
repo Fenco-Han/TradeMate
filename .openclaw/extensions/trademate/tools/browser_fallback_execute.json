@@ -1,0 +1,4 @@
+{
+  "name": "browser_fallback_execute",
+  "description": "Execute a browser fallback action and return execution proof fields."
+}

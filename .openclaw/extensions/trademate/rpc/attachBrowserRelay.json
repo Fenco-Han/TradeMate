@@ -1,0 +1,4 @@
+{
+  "name": "trademate.attachBrowserRelay",
+  "description": "Attach relay to a specific browser tab context."
+}

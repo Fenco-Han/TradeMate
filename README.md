@@ -5,7 +5,7 @@ TradeMate is an agent-native Amazon operations platform. The current codebase im
 1. Monorepo workspace for web, extension, shared types, and API
 2. Go API with MySQL-backed auth, goal, suggestion, approval, task, notification, and audit modules
 3. Vue web app and Chrome extension baseline connected to API
-4. OpenClaw extension skeleton
+4. OpenClaw extension with relay RPC set and browser fallback action contract stubs
 
 ## Structure
 

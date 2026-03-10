@@ -1,0 +1,4 @@
+{
+  "name": "trademate.getActiveBrowserContext",
+  "description": "Return active browser context info for relay attach checks."
+}

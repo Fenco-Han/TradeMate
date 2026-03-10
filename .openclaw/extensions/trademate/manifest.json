@@ -1,12 +1,17 @@
 {
   "name": "trademate",
-  "version": "0.0.1",
-  "description": "TradeMate OpenClaw extension",
+  "version": "0.0.2",
+  "description": "TradeMate OpenClaw extension for relay checks and browser fallback actions",
   "rpc": [
+    "trademate.getActiveBrowserContext",
+    "trademate.attachBrowserRelay",
+    "trademate.runBrowserAction",
     "trademate.getRelayStatus"
   ],
   "tools": [
+    "ad_action_preview",
+    "browser_fallback_prepare",
+    "browser_fallback_execute",
     "relay_health_check"
   ]
 }
-

@@ -1,0 +1,4 @@
+{
+  "name": "ad_action_preview",
+  "description": "Preview a proposed ad action payload and return fallback eligibility hints."
+}

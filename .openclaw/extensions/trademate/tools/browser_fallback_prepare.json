@@ -1,0 +1,4 @@
+{
+  "name": "browser_fallback_prepare",
+  "description": "Prepare browser relay context and normalize payload before fallback execution."
+}

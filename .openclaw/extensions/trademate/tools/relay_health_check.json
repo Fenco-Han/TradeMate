@@ -1,5 +1,4 @@
 {
   "name": "relay_health_check",
-  "description": "Placeholder tool for checking browser relay health."
+  "description": "Check relay attachment, host support and last known diagnostics."
 }
-
