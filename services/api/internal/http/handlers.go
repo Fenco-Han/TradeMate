@@ -399,7 +399,7 @@ func (h *Handlers) GetTask(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	auditLogs, err := h.repo.ListAuditLogs(storeID, 50)
+	auditLogs, err := h.repo.ListAuditLogsByTarget(storeID, "task", taskID, 50)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err.Error())
 		return

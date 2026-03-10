@@ -1184,6 +1184,44 @@ LIMIT ?`, storeID, limit)
 	return list, nil
 }
 
+func (r *Repository) ListAuditLogsByTarget(storeID, targetType, targetID string, limit int) ([]models.AuditLog, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if strings.TrimSpace(storeID) == "" || strings.TrimSpace(targetType) == "" || strings.TrimSpace(targetID) == "" {
+		return []models.AuditLog{}, nil
+	}
+
+	rows, err := r.db.Query(`
+SELECT id, agent_type, actor_id, action, target_type, target_id, result, metadata_json, created_at
+FROM audit_log
+WHERE store_id = ? AND target_type = ? AND target_id = ?
+ORDER BY created_at DESC
+LIMIT ?`, storeID, targetType, targetID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]models.AuditLog, 0)
+	for rows.Next() {
+		var item models.AuditLog
+		var metadata sql.NullString
+		var createdAt time.Time
+		if err := rows.Scan(&item.ID, &item.AgentType, &item.ActorID, &item.Action,
+			&item.TargetType, &item.TargetID, &item.Result, &metadata, &createdAt); err != nil {
+			return nil, err
+		}
+		if metadata.Valid {
+			item.MetadataJSON = &metadata.String
+		}
+		item.CreatedAt = toRFC3339(createdAt)
+		list = append(list, item)
+	}
+
+	return list, nil
+}
+
 func (r *Repository) CreateAuditLog(storeID, actorID, action, targetType, targetID, result, metadata string) error {
 	if strings.TrimSpace(storeID) == "" {
 		storeID = "store_us_001"
