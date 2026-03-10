@@ -228,10 +228,16 @@ func (s *Service) executeViaFallback(ctx context.Context, storeID string, task m
 	})
 	if err != nil {
 		_ = s.repo.CreateAuditLog(storeID, "system_worker", "task_fallback_failed", "task", task.ID, "failed", fmt.Sprintf(`{"action_name":"%s","error":"%s"}`, actionName, sanitizeJSON(err.Error())))
+		targetType := "task"
+		targetID := task.ID
+		_ = s.repo.CreateNotificationForStore(storeID, "task_fallback", "high", "Fallback execution failed", truncateMessage(fmt.Sprintf("Task %s fallback failed: %s", task.TaskType, err.Error())), &targetType, &targetID)
 		return executor.ExecutionResult{}, err
 	}
 
 	_ = s.repo.CreateAuditLog(storeID, "system_worker", "task_fallback_executed", "task", task.ID, "success", fmt.Sprintf(`{"action_name":"%s","channel":"%s"}`, actionName, result.Channel))
+	targetType := "task"
+	targetID := task.ID
+	_ = s.repo.CreateNotificationForStore(storeID, "task_fallback", "medium", "Fallback executed", truncateMessage(fmt.Sprintf("Task %s executed by browser fallback", task.TaskType)), &targetType, &targetID)
 	return executor.ExecutionResult{
 		ExecutionID: result.ExecutionID,
 		Channel:     result.Channel,

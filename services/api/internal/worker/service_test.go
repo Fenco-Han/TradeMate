@@ -204,4 +204,7 @@ func TestRunOnceFallbackExecution(t *testing.T) {
 	if repo.auditLogs < 2 {
 		t.Fatalf("expected at least 2 audit logs, got %d", repo.auditLogs)
 	}
+	if repo.notifications < 2 {
+		t.Fatalf("expected at least 2 notifications, got %d", repo.notifications)
+	}
 }
