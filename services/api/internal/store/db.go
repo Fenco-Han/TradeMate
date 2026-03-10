@@ -207,3 +207,26 @@ ON DUPLICATE KEY UPDATE updated_at = UTC_TIMESTAMP()`)
 
 	return tx.Commit()
 }
+
+func RollbackMigrations(db *sql.DB) error {
+	statements := []string{
+		"DROP TABLE IF EXISTS audit_log",
+		"DROP TABLE IF EXISTS notification",
+		"DROP TABLE IF EXISTS task_event",
+		"DROP TABLE IF EXISTS task",
+		"DROP TABLE IF EXISTS approval",
+		"DROP TABLE IF EXISTS suggestion",
+		"DROP TABLE IF EXISTS agent_goal",
+		"DROP TABLE IF EXISTS role_assignment",
+		"DROP TABLE IF EXISTS store",
+		"DROP TABLE IF EXISTS user_account",
+	}
+
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("rollback migration failed: %w", err)
+		}
+	}
+
+	return nil
+}

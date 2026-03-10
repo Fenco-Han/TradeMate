@@ -27,9 +27,14 @@ docs/
 1. Copy `.env.example` to `.env`
 2. Start infra with `docker compose up -d`
 3. Install packages with `pnpm install`
-4. Start web with `pnpm dev:web`
-5. Start extension build watch with `pnpm dev:extension`
-6. Start API with `go run ./services/api/cmd/api`
+4. Run migration with `pnpm migrate:up` (or `make migrate-up`)
+5. Start all services with `make dev`
+
+Useful commands:
+
+1. `make dev-api` / `make dev-web` / `make dev-extension`
+2. `make migrate-up` / `make migrate-down` / `make migrate-reset`
+3. `pnpm typecheck` / `pnpm build`
 
 ## Current status
 
@@ -50,3 +55,8 @@ The repository currently focuses on a DB-backed platform baseline:
 1. Base path: `/api/v1`
 2. Auth: `Authorization: Bearer <token>`
 3. Response envelope and fields use `snake_case`
+
+## CI
+
+1. GitHub Actions workflow: `.github/workflows/ci.yml`
+2. Runs Node checks (`pnpm typecheck`, `pnpm build`) and Go checks (`go test ./...`)
