@@ -8,3 +8,7 @@ import (
 func AuthMiddlewareProxy(tokenService *auth.Service) gin.HandlerFunc {
 	return authMiddleware(tokenService)
 }
+
+func CORSMiddlewareProxy() gin.HandlerFunc {
+	return corsMiddleware()
+}

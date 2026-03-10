@@ -43,6 +43,26 @@ func authMiddleware(tokenService *auth.Service) gin.HandlerFunc {
 	}
 }
 
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := strings.TrimSpace(c.GetHeader("Origin"))
+		if origin != "" {
+			c.Header("Vary", "Origin")
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Requested-With")
+			c.Header("Access-Control-Max-Age", "600")
+		}
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func extractToken(c *gin.Context) string {
 	header := c.GetHeader("Authorization")
 	if strings.HasPrefix(header, "Bearer ") {

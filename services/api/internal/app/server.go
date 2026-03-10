@@ -39,6 +39,7 @@ func NewServer(cfg config.Config) *gin.Engine {
 	handlers := httpapi.NewHandlers(repo, tokenService, hub, adsClient, workerService)
 
 	router := gin.Default()
+	router.Use(httpapi.CORSMiddlewareProxy())
 	router.Use(httpapi.AuthMiddlewareProxy(tokenService))
 
 	router.GET("/health", handlers.Health)
