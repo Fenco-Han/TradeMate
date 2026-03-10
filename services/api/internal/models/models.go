@@ -183,6 +183,11 @@ type BatchApproveRequest struct {
 	ExecuteImmediately bool     `json:"execute_immediately"`
 }
 
+type BatchRejectRequest struct {
+	SuggestionIDs []string `json:"suggestion_ids"`
+	Note          string   `json:"note"`
+}
+
 type ApproveSuggestionResponse struct {
 	ApprovalID string `json:"approval_id"`
 	TaskID     string `json:"task_id"`

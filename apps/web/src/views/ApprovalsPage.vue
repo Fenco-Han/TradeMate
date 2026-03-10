@@ -17,6 +17,9 @@
         <button :disabled="selectedIDs.length === 0 || loading" @click="batchApprove">
           Batch Approve ({{ selectedIDs.length }})
         </button>
+        <button class="secondary" :disabled="selectedIDs.length === 0 || loading" @click="batchReject">
+          Batch Reject ({{ selectedIDs.length }})
+        </button>
         <span v-if="message" class="hint">{{ message }}</span>
       </div>
       <p v-if="error" class="error">{{ error }}</p>
@@ -171,6 +174,28 @@ async function batchApprove() {
     await loadSuggestions();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Batch approve failed";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function batchReject() {
+  if (selectedIDs.value.length === 0) {
+    return;
+  }
+
+  loading.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    const result = await api.batchRejectSuggestions({
+      suggestion_ids: selectedIDs.value
+    });
+    message.value = `Rejected ${result.total} suggestion(s)`;
+    selectedIDs.value = [];
+    await loadSuggestions();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Batch reject failed";
   } finally {
     loading.value = false;
   }

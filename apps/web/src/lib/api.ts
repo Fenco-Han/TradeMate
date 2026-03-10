@@ -178,6 +178,21 @@ export const api = {
       }
     );
   },
+  batchRejectSuggestions(input: {
+    suggestion_ids: string[];
+    note?: string;
+  }) {
+    return request<{ suggestion_ids: string[]; total: number }>(
+      "/agents/ad/suggestions/batch-reject",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          suggestion_ids: input.suggestion_ids,
+          note: input.note ?? "batch rejected from web"
+        })
+      }
+    );
+  },
   listTasks(input?: {
     status?: string;
     risk_level?: RiskLevel;

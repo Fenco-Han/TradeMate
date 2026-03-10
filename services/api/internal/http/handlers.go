@@ -346,6 +346,7 @@ func (h *Handlers) BatchApproveSuggestions(c *gin.Context) {
 		respondErrorCode(c, http.StatusBadRequest, "INVALID_PAYLOAD", "invalid payload")
 		return
 	}
+	input.SuggestionIDs = filterSuggestionIDs(input.SuggestionIDs)
 	if len(input.SuggestionIDs) == 0 {
 		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", "suggestion_ids is required")
 		return
@@ -366,6 +367,34 @@ func (h *Handlers) BatchApproveSuggestions(c *gin.Context) {
 	}
 
 	respond(c, http.StatusOK, gin.H{"results": results, "total": len(results)})
+}
+
+func (h *Handlers) BatchRejectSuggestions(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	userID := contextValue(c, ctxUserIDKey)
+
+	var input models.BatchRejectRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PAYLOAD", "invalid payload")
+		return
+	}
+	input.SuggestionIDs = filterSuggestionIDs(input.SuggestionIDs)
+	if len(input.SuggestionIDs) == 0 {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", "suggestion_ids is required")
+		return
+	}
+
+	rejectedIDs, err := h.repo.BatchRejectSuggestions(storeID, userID, input)
+	if err != nil {
+		h.handleStoreError(c, err)
+		return
+	}
+
+	targetType := "suggestion"
+	_ = h.repo.CreateNotificationForStore(storeID, "suggestion_update", "low", "Batch rejection completed", "Suggestions were rejected in batch.", &targetType, nil)
+	h.publishNotificationEvent(storeID)
+
+	respond(c, http.StatusOK, gin.H{"suggestion_ids": rejectedIDs, "total": len(rejectedIDs)})
 }
 
 func (h *Handlers) ListTasks(c *gin.Context) {
@@ -667,6 +696,23 @@ func parseIntOrDefault(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func filterSuggestionIDs(ids []string) []string {
+	set := make(map[string]struct{}, len(ids))
+	list := make([]string, 0, len(ids))
+	for _, item := range ids {
+		id := strings.TrimSpace(item)
+		if id == "" {
+			continue
+		}
+		if _, exists := set[id]; exists {
+			continue
+		}
+		set[id] = struct{}{}
+		list = append(list, id)
+	}
+	return list
 }
 
 func deriveTaskExecutionContext(task models.Task, snapshot *models.ReviewSnapshot) models.TaskExecutionContext {

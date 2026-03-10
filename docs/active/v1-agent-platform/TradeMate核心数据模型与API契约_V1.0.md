@@ -410,6 +410,19 @@
 }
 ```
 
+### 5.9.1 批量拒绝
+
+`POST /api/v1/agents/ad/suggestions/batch-reject`
+
+请求：
+
+```json
+{
+  "suggestion_ids": ["sg_003", "sg_004"],
+  "note": "batch rejected"
+}
+```
+
 ### 5.10 获取任务列表
 
 `GET /api/v1/tasks?agent_type=ad_agent&store_id=store_001`

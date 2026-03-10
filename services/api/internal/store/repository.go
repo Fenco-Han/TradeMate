@@ -596,8 +596,9 @@ func (r *Repository) BatchApproveSuggestions(storeID, actorID string, input mode
 		}
 	}()
 
-	results := make([]models.ApproveSuggestionResponse, 0, len(input.SuggestionIDs))
-	for _, suggestionID := range input.SuggestionIDs {
+	uniqueIDs := normalizeSuggestionIDs(input.SuggestionIDs)
+	results := make([]models.ApproveSuggestionResponse, 0, len(uniqueIDs))
+	for _, suggestionID := range uniqueIDs {
 		result, approveErr := r.approveSuggestionTx(tx, storeID, actorID, suggestionID, models.ApproveSuggestionRequest{
 			Note:               input.Note,
 			ExecuteImmediately: input.ExecuteImmediately,
@@ -627,50 +628,58 @@ func (r *Repository) RejectSuggestion(storeID, actorID, suggestionID string, inp
 		}
 	}()
 
-	row := tx.QueryRow(`
-SELECT risk_level, status
-FROM suggestion
-WHERE id = ? AND store_id = ?
-LIMIT 1
-FOR UPDATE`, suggestionID, storeID)
-
-	var riskLevel string
-	var status string
-	if err := row.Scan(&riskLevel, &status); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-
-	if err := ValidateSuggestionTransition(status, "rejected"); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidTransition, err)
-	}
-
-	if _, err := tx.Exec(`
-UPDATE suggestion
-SET status = 'rejected', updated_at = UTC_TIMESTAMP()
-WHERE id = ?`, suggestionID); err != nil {
-		return err
-	}
-
-	approvalID := newID("ap")
-	_, err = tx.Exec(`
-INSERT INTO approval (
-  id, suggestion_id, store_id, risk_level, status,
-  requested_by, approved_by, decision_note, decided_at, created_at
-)
-VALUES (?, ?, ?, ?, 'rejected', ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
-		approvalID, suggestionID, storeID, riskLevel, actorID, actorID, nullString(input.Note))
-	if err != nil {
-		return err
-	}
-
-	if err := r.insertAuditLogTx(tx, actorID, "suggestion_rejected", "suggestion", suggestionID, "success", fmt.Sprintf(`{"approval_id":"%s"}`, approvalID)); err != nil {
+	if err := r.rejectSuggestionTx(tx, storeID, actorID, suggestionID, input); err != nil {
 		return err
 	}
 
 	return tx.Commit()
+}
+
+func (r *Repository) BatchRejectSuggestions(storeID, actorID string, input models.BatchRejectRequest) ([]string, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	uniqueIDs := normalizeSuggestionIDs(input.SuggestionIDs)
+	results := make([]string, 0, len(uniqueIDs))
+	for _, suggestionID := range uniqueIDs {
+		if rejectErr := r.rejectSuggestionTx(tx, storeID, actorID, suggestionID, models.RejectSuggestionRequest{
+			Note: input.Note,
+		}); rejectErr != nil {
+			err = rejectErr
+			return nil, err
+		}
+		results = append(results, suggestionID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func normalizeSuggestionIDs(ids []string) []string {
+	set := make(map[string]struct{}, len(ids))
+	list := make([]string, 0, len(ids))
+	for _, item := range ids {
+		id := strings.TrimSpace(item)
+		if id == "" {
+			continue
+		}
+		if _, exists := set[id]; exists {
+			continue
+		}
+		set[id] = struct{}{}
+		list = append(list, id)
+	}
+	return list
 }
 
 func (r *Repository) ListTasks(filter TaskFilter) ([]models.Task, int, error) {
@@ -1374,6 +1383,53 @@ VALUES (?, 'ad_agent', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, NULL, UTC
 		TaskID:     taskID,
 		TaskStatus: taskStatus,
 	}, nil
+}
+
+func (r *Repository) rejectSuggestionTx(tx *sql.Tx, storeID, actorID, suggestionID string, input models.RejectSuggestionRequest) error {
+	row := tx.QueryRow(`
+SELECT risk_level, status
+FROM suggestion
+WHERE id = ? AND store_id = ?
+LIMIT 1
+FOR UPDATE`, suggestionID, storeID)
+
+	var riskLevel string
+	var status string
+	if err := row.Scan(&riskLevel, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if err := ValidateSuggestionTransition(status, "rejected"); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidTransition, err)
+	}
+
+	if _, err := tx.Exec(`
+UPDATE suggestion
+SET status = 'rejected', updated_at = UTC_TIMESTAMP()
+WHERE id = ?`, suggestionID); err != nil {
+		return err
+	}
+
+	approvalID := newID("ap")
+	_, err := tx.Exec(`
+INSERT INTO approval (
+  id, suggestion_id, store_id, risk_level, status,
+  requested_by, approved_by, decision_note, decided_at, created_at
+)
+VALUES (?, ?, ?, ?, 'rejected', ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+		approvalID, suggestionID, storeID, riskLevel, actorID, actorID, nullString(input.Note))
+	if err != nil {
+		return err
+	}
+
+	if err := r.insertAuditLogTx(tx, actorID, "suggestion_rejected", "suggestion", suggestionID, "success", fmt.Sprintf(`{"approval_id":"%s"}`, approvalID)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Repository) insertTaskEventTx(tx *sql.Tx, taskID string, fromStatus *string, toStatus, eventType, payload string) error {
