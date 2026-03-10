@@ -130,7 +130,9 @@ func TestRunBrowserActionRuntimeRejected(t *testing.T) {
 }
 
 func TestRunBrowserActionRuntimeHTTPError(t *testing.T) {
+	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
 		http.Error(w, "runtime unavailable", http.StatusBadGateway)
 	}))
 	defer server.Close()
@@ -153,5 +155,77 @@ func TestRunBrowserActionRuntimeHTTPError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "status 502") {
 		t.Fatalf("expected status error, got %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected retry once for 502, got calls=%d", calls)
+	}
+}
+
+func TestRunBrowserActionRuntimeRetryThenSuccess(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "temporary unavailable", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"accepted": true,
+			"execution_id": "oc_retry_ok",
+			"channel": "browser_fallback",
+			"status": "success",
+			"summary": "retry success"
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{
+		OpenClawFallbackEnabled: true,
+		OpenClawRuntimeURL:      server.URL,
+	})
+	result, err := client.RunBrowserAction(context.Background(), BrowserActionRequest{
+		TaskID:     "task_1",
+		StoreID:    "store_1",
+		ActionName: "pause_campaign",
+		Payload:    map[string]any{"relay_attached": true},
+	})
+	if err != nil {
+		t.Fatalf("expected success after retry, got %v", err)
+	}
+	if result.ExecutionID != "oc_retry_ok" {
+		t.Fatalf("unexpected execution id: %s", result.ExecutionID)
+	}
+	if calls != 2 {
+		t.Fatalf("expected calls=2, got %d", calls)
+	}
+}
+
+func TestRunBrowserActionRuntimeNoRetryOnClientError(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{
+		OpenClawFallbackEnabled: true,
+		OpenClawRuntimeURL:      server.URL,
+	})
+	_, err := client.RunBrowserAction(context.Background(), BrowserActionRequest{
+		TaskID:     "task_1",
+		StoreID:    "store_1",
+		ActionName: "pause_campaign",
+		Payload:    map[string]any{"relay_attached": true},
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "status 400") {
+		t.Fatalf("expected status 400, got %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected no retry for 400, got calls=%d", calls)
 	}
 }

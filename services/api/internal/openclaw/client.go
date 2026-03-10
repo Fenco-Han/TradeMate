@@ -88,9 +88,26 @@ func (c *Client) runViaRuntime(ctx context.Context, req BrowserActionRequest) (B
 		return BrowserActionResult{}, fmt.Errorf("marshal runtime request: %w", err)
 	}
 
+	lastErr := error(nil)
+	for attempt := 1; attempt <= 2; attempt++ {
+		result, retryable, callErr := c.callRuntimeOnce(ctx, req, bodyRaw)
+		if callErr == nil {
+			return result, nil
+		}
+		lastErr = callErr
+
+		if !retryable || attempt == 2 {
+			break
+		}
+	}
+
+	return BrowserActionResult{}, lastErr
+}
+
+func (c *Client) callRuntimeOnce(ctx context.Context, req BrowserActionRequest, bodyRaw []byte) (BrowserActionResult, bool, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.runtimeURL, bytes.NewReader(bodyRaw))
 	if err != nil {
-		return BrowserActionResult{}, fmt.Errorf("build runtime request: %w", err)
+		return BrowserActionResult{}, false, fmt.Errorf("build runtime request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.runtimeToken != "" {
@@ -99,19 +116,28 @@ func (c *Client) runViaRuntime(ctx context.Context, req BrowserActionRequest) (B
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return BrowserActionResult{}, fmt.Errorf("call openclaw runtime: %w", err)
+		if ctx.Err() != nil {
+			return BrowserActionResult{}, false, ctx.Err()
+		}
+		return BrowserActionResult{}, true, fmt.Errorf("call openclaw runtime: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return BrowserActionResult{}, fmt.Errorf("read runtime response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return BrowserActionResult{}, fmt.Errorf("openclaw runtime status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return BrowserActionResult{}, false, fmt.Errorf("read runtime response: %w", err)
 	}
 
-	return parseRuntimeResult(req, respBody)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		retryable := resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests
+		return BrowserActionResult{}, retryable, fmt.Errorf("openclaw runtime status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	result, parseErr := parseRuntimeResult(req, respBody)
+	if parseErr != nil {
+		return BrowserActionResult{}, false, parseErr
+	}
+	return result, false, nil
 }
 
 func runMock(req BrowserActionRequest) BrowserActionResult {
