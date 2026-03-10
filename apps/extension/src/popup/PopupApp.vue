@@ -21,7 +21,7 @@
         <div class="summary-grid">
           <div class="metric">
             <span>Suggestions</span>
-            <strong>{{ suggestions.length }}</strong>
+            <strong>{{ displaySuggestions.length }}</strong>
           </div>
           <div class="metric">
             <span>Tasks</span>
@@ -29,7 +29,7 @@
           </div>
           <div class="metric">
             <span>Unread</span>
-            <strong>{{ unreadNotifications }}</strong>
+            <strong>{{ settings.reminders_enabled ? unreadNotifications : 0 }}</strong>
           </div>
           <div class="metric">
             <span>High Risk</span>
@@ -41,6 +41,7 @@
       <section class="card">
         <h2>{{ storeName }}</h2>
         <p>{{ goalSummary }}</p>
+        <p class="meta">默认站点: {{ settings.default_site_code }} · 提醒: {{ settings.reminders_enabled ? "开启" : "关闭" }}</p>
       </section>
 
       <section class="card tabs-card">
@@ -77,6 +78,9 @@
                 <span :class="['risk-pill', item.risk_level]">{{ item.risk_level }}</span>
               </div>
               <p>{{ item.reason_summary }}</p>
+              <p v-if="settings.show_impact_estimate && hasImpactEstimate(item)" class="meta">
+                影响预估: {{ summarizeImpact(item) }}
+              </p>
             </li>
           </ul>
         </div>
@@ -86,13 +90,17 @@
             <h3>Pending Suggestions</h3>
             <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
           </div>
+          <p v-if="settings.show_high_risk_only" class="meta">当前仅展示高风险建议</p>
           <ul class="popup-list">
-            <li v-for="item in suggestions" :key="item.id">
+            <li v-for="item in displaySuggestions" :key="item.id">
               <div class="row">
                 <strong>{{ item.title }}</strong>
                 <span :class="['risk-pill', item.risk_level]">{{ item.risk_level }}</span>
               </div>
               <p>{{ item.reason_summary }}</p>
+              <p v-if="settings.show_impact_estimate && hasImpactEstimate(item)" class="meta">
+                影响预估: {{ summarizeImpact(item) }}
+              </p>
               <div class="row actions-inline">
                 <button class="small" :disabled="loading" @click="approveSuggestion(item.id)">Approve</button>
                 <button class="small secondary" :disabled="loading" @click="rejectSuggestion(item.id)">
@@ -171,6 +179,7 @@
 import { computed, onMounted, ref } from "vue";
 import type { AdGoal, MeResponse, Notification, Suggestion, Task } from "@trademate/shared-types";
 import { extensionApi } from "../shared/api";
+import { DEFAULT_SETTINGS, loadExtensionSettings, type ExtensionSettings } from "../shared/settings";
 
 const account = ref("demo@trademate.dev");
 const password = ref("demo123");
@@ -185,15 +194,31 @@ const goal = ref<AdGoal | null>(null);
 const suggestions = ref<Suggestion[]>([]);
 const tasks = ref<Task[]>([]);
 const notifications = ref<Notification[]>([]);
+const settings = ref<ExtensionSettings>({ ...DEFAULT_SETTINGS });
 
-const topSuggestions = computed(() => suggestions.value.slice(0, 5));
+const displaySuggestions = computed(() => {
+  if (settings.value.show_high_risk_only) {
+    return suggestions.value.filter((item) => item.risk_level === "high");
+  }
+  return suggestions.value;
+});
+const topSuggestions = computed(() => displaySuggestions.value.slice(0, 5));
 const highRiskCount = computed(
   () => suggestions.value.filter((item) => item.risk_level === "high").length
 );
 const unreadNotifications = computed(
   () => notifications.value.filter((item) => !item.is_read).length
 );
-const storeName = computed(() => me.value?.stores[0]?.store_name ?? "No store");
+const storeName = computed(() => {
+  if (settings.value.default_store_id) {
+    const matched = me.value?.stores.find((store) => store.id === settings.value.default_store_id);
+    if (matched) {
+      return matched.store_name;
+    }
+  }
+
+  return me.value?.stores[0]?.store_name ?? "No store";
+});
 const goalSummary = computed(() => {
   if (!goal.value) {
     return "No goal loaded";
@@ -203,6 +228,8 @@ const goalSummary = computed(() => {
 });
 
 onMounted(async () => {
+  settings.value = await loadExtensionSettings();
+
   const storedToken = await chrome.storage.local.get("token");
   if (storedToken.token) {
     token.value = storedToken.token;
@@ -246,6 +273,7 @@ async function hydrate() {
     suggestions.value = suggestionsResult.list;
     tasks.value = tasksResult.list;
     notifications.value = notificationsResult.list;
+    settings.value = await loadExtensionSettings();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Load failed";
   } finally {
@@ -352,6 +380,21 @@ async function markRead(notificationID: string) {
   } finally {
     loading.value = false;
   }
+}
+
+function hasImpactEstimate(item: Suggestion) {
+  return item.impact_estimate_json && Object.keys(item.impact_estimate_json).length > 0;
+}
+
+function summarizeImpact(item: Suggestion) {
+  if (!item.impact_estimate_json) {
+    return "-";
+  }
+
+  return Object.entries(item.impact_estimate_json)
+    .slice(0, 2)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(" · ");
 }
 
 function formatDate(value: string) {

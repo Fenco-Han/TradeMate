@@ -43,6 +43,7 @@ The repository currently focuses on a DB-backed platform baseline:
 6. List/cancel/retry tasks with status transition checks
 7. Notification list/read and WebSocket push (`/api/v1/ws`)
 8. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
+9. Extension popup supports suggestions/tasks/notifications workflows and configurable options
 
 ## API conventions
 
