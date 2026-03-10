@@ -1,5 +1,18 @@
-ALTER TABLE user_account
-  ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';
+SET @password_hash_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'user_account'
+    AND column_name = 'password_hash'
+);
+SET @password_hash_ddl = IF(
+  @password_hash_exists = 0,
+  'ALTER TABLE user_account ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT ''''',
+  'SELECT 1'
+);
+PREPARE password_hash_stmt FROM @password_hash_ddl;
+EXECUTE password_hash_stmt;
+DEALLOCATE PREPARE password_hash_stmt;
 
 CREATE TABLE IF NOT EXISTS approval (
   id VARCHAR(64) PRIMARY KEY,
