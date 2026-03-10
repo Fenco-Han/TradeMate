@@ -119,6 +119,25 @@
           </li>
         </ul>
       </article>
+
+      <article class="panel nested-panel detail-audit-panel" v-if="selectedReview">
+        <h4>Review Snapshot</h4>
+        <p>
+          状态: <strong>{{ selectedReview.status }}</strong>
+          <span v-if="selectedReview.generated_at"> · 生成时间: {{ formatDate(selectedReview.generated_at) }}</span>
+        </p>
+        <p v-if="selectedReview.summary">{{ selectedReview.summary }}</p>
+        <div class="panel-grid metrics-grid">
+          <article class="panel nested-panel">
+            <h4>Before Metrics</h4>
+            <pre class="json-block">{{ formatJSON(selectedReview.before_metrics) }}</pre>
+          </article>
+          <article class="panel nested-panel">
+            <h4>After Metrics</h4>
+            <pre class="json-block">{{ formatJSON(selectedReview.after_metrics) }}</pre>
+          </article>
+        </div>
+      </article>
     </section>
   </AppShell>
 </template>
@@ -126,7 +145,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { RiskLevel, Task, TaskDetailResponse, TaskStatus } from "@trademate/shared-types";
+import type { ReviewSnapshot, RiskLevel, Task, TaskDetailResponse, TaskStatus } from "@trademate/shared-types";
 import AppShell from "../components/AppShell.vue";
 import { api } from "../lib/api";
 import { hydrateSession, sessionState } from "../stores/session";
@@ -143,6 +162,7 @@ const statusFilter = ref<"" | TaskStatus>("");
 const riskLevel = ref<"" | RiskLevel>("");
 const selectedTaskID = ref("");
 const selectedDetail = ref<TaskDetailResponse | null>(null);
+const selectedReview = ref<ReviewSnapshot | null>(null);
 
 const storeName = computed(() => sessionState.me?.stores[0]?.store_name ?? "");
 const relatedAuditLogs = computed(() => {
@@ -192,6 +212,7 @@ async function loadTasks() {
     if (selectedTaskID.value && !tasks.value.some((item) => item.id === selectedTaskID.value)) {
       selectedTaskID.value = "";
       selectedDetail.value = null;
+      selectedReview.value = null;
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load tasks";
@@ -285,8 +306,9 @@ async function loadTaskDetail(taskID: string) {
   detailLoading.value = true;
   error.value = "";
   try {
-    const detail = await api.getTask(taskID);
+    const [detail, review] = await Promise.all([api.getTask(taskID), api.getTaskReview(taskID)]);
     selectedDetail.value = detail;
+    selectedReview.value = review;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Failed to load task detail";
   } finally {
@@ -307,5 +329,9 @@ function summarizeEvent(raw?: string | null) {
     return raw;
   }
   return raw;
+}
+
+function formatJSON(value?: Record<string, unknown>) {
+  return JSON.stringify(value ?? {}, null, 2);
 }
 </script>

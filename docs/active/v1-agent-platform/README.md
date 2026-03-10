@@ -15,6 +15,7 @@
 9. `TradeMate插件与Web页面原型交互说明_V1.0.md`
 10. `TradeMate开发计划_V1.0.md`
 11. `TradeMate Codex任务清单与执行计划_V1.0.md`
+12. `TradeMate缺陷待办_V1.0.md`
 
 ## 适用规则
 
