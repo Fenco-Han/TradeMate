@@ -8,6 +8,7 @@ import type {
   ReviewSnapshot,
   Suggestion,
   Task,
+  TaskDetailResponse,
   RiskLevel
 } from "@trademate/shared-types";
 
@@ -203,6 +204,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ limit: input?.limit ?? 20 })
     });
+  },
+  getTask(taskID: string) {
+    return request<TaskDetailResponse>(`/tasks/${taskID}`);
   },
   getTaskReview(taskID: string) {
     return request<ReviewSnapshot>(`/agents/ad/reviews/${taskID}`);

@@ -214,6 +214,18 @@ a {
   white-space: nowrap;
 }
 
+.inline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.detail-audit-panel {
+  margin-top: 12px;
+}
+
 button.small {
   padding: 6px 10px;
   font-size: 13px;
