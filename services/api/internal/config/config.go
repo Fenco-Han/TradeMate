@@ -9,6 +9,8 @@ type Config struct {
 	JWTExpiresHour          int
 	MySQLDSN                string
 	OpenClawFallbackEnabled bool
+	OpenClawRuntimeURL      string
+	OpenClawRuntimeToken    string
 	AmazonAdsClientID       string
 	AmazonAdsClientSecret   string
 	AmazonAdsRedirectURI    string
@@ -30,6 +32,8 @@ func Load() Config {
 		JWTExpiresHour:          expiresHour,
 		MySQLDSN:                getEnv("MYSQL_DSN", "trademate:trademate@tcp(localhost:3306)/trademate?parseTime=true"),
 		OpenClawFallbackEnabled: getEnvBool("OPENCLOW_FALLBACK_ENABLED", false),
+		OpenClawRuntimeURL:      getEnv("OPENCLOW_RUNTIME_URL", ""),
+		OpenClawRuntimeToken:    getEnv("OPENCLOW_RUNTIME_TOKEN", ""),
 		AmazonAdsClientID:       getEnv("AMAZON_ADS_CLIENT_ID", ""),
 		AmazonAdsClientSecret:   getEnv("AMAZON_ADS_CLIENT_SECRET", ""),
 		AmazonAdsRedirectURI:    getEnv("AMAZON_ADS_REDIRECT_URI", ""),

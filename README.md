@@ -30,6 +30,7 @@ docs/
 4. Run migration with `pnpm migrate:up` (or `make migrate-up`)
 5. Start all services with `make dev`
 6. Enable browser fallback in API/worker with `OPENCLOW_FALLBACK_ENABLED=true` (optional)
+7. If you have OpenClaw runtime available, set `OPENCLOW_RUNTIME_URL` to the runtime RPC endpoint (optional), and `OPENCLOW_RUNTIME_TOKEN` if auth is required
 
 Useful commands:
 
@@ -57,6 +58,7 @@ The repository currently focuses on a DB-backed platform baseline:
 13. Web pages for dashboard, approvals, tasks center, review center, notifications, audit logs, and goals
 14. Extension popup supports suggestions/tasks/reviews/notifications workflows and configurable options
 15. Worker supports controlled OpenClaw browser fallback dispatch for selected task types
+16. OpenClaw fallback client supports runtime RPC mode (`OPENCLOW_RUNTIME_URL`) with mock fallback kept for local development
 
 ## API conventions
 
