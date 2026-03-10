@@ -32,8 +32,8 @@
             <strong>{{ settings.reminders_enabled ? unreadNotifications : 0 }}</strong>
           </div>
           <div class="metric">
-            <span>High Risk</span>
-            <strong>{{ highRiskCount }}</strong>
+            <span>Reviews Ready</span>
+            <strong>{{ readyReviewCount }}</strong>
           </div>
         </div>
       </section>
@@ -57,6 +57,9 @@
           </button>
           <button :class="['tab-btn', { active: activeTab === 'tasks' }]" @click="activeTab = 'tasks'">
             Tasks
+          </button>
+          <button :class="['tab-btn', { active: activeTab === 'reviews' }]" @click="activeTab = 'reviews'">
+            Reviews
           </button>
           <button
             :class="['tab-btn', { active: activeTab === 'notifications' }]"
@@ -144,6 +147,25 @@
           </ul>
         </div>
 
+        <div v-else-if="activeTab === 'reviews'" class="tab-pane">
+          <div class="row">
+            <h3>Recent Reviews</h3>
+            <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
+          </div>
+          <p class="meta">ready {{ readyReviewCount }} · partial {{ partialReviewCount }} · pending {{ pendingReviewCount }}</p>
+          <ul class="popup-list">
+            <li v-for="item in reviews" :key="item.id ?? item.task_id" class="review-item">
+              <div class="row">
+                <strong>{{ taskTypeOf(item.task_id) }}</strong>
+                <span :class="['status-pill', item.status]">{{ item.status }}</span>
+              </div>
+              <p>Task: {{ item.task_id }}</p>
+              <p v-if="item.summary">{{ item.summary }}</p>
+              <p class="meta">Generated: {{ formatDate(item.generated_at) }}</p>
+            </li>
+          </ul>
+        </div>
+
         <div v-else class="tab-pane">
           <div class="row">
             <h3>Notifications</h3>
@@ -177,7 +199,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { AdGoal, MeResponse, Notification, Suggestion, Task } from "@trademate/shared-types";
+import type { AdGoal, MeResponse, Notification, ReviewSnapshot, Suggestion, Task } from "@trademate/shared-types";
 import { extensionApi } from "../shared/api";
 import { DEFAULT_SETTINGS, loadExtensionSettings, type ExtensionSettings } from "../shared/settings";
 
@@ -187,13 +209,19 @@ const error = ref("");
 const message = ref("");
 const token = ref("");
 const loading = ref(false);
-const activeTab = ref<"overview" | "suggestions" | "tasks" | "notifications">("overview");
+const activeTab = ref<"overview" | "suggestions" | "tasks" | "reviews" | "notifications">("overview");
 
 const me = ref<MeResponse | null>(null);
 const goal = ref<AdGoal | null>(null);
 const suggestions = ref<Suggestion[]>([]);
 const tasks = ref<Task[]>([]);
+const reviews = ref<ReviewSnapshot[]>([]);
 const notifications = ref<Notification[]>([]);
+const reviewStatusCounts = ref<Record<string, number>>({
+  ready: 0,
+  partial: 0,
+  pending: 0
+});
 const settings = ref<ExtensionSettings>({ ...DEFAULT_SETTINGS });
 
 const displaySuggestions = computed(() => {
@@ -203,12 +231,12 @@ const displaySuggestions = computed(() => {
   return suggestions.value;
 });
 const topSuggestions = computed(() => displaySuggestions.value.slice(0, 5));
-const highRiskCount = computed(
-  () => suggestions.value.filter((item) => item.risk_level === "high").length
-);
 const unreadNotifications = computed(
   () => notifications.value.filter((item) => !item.is_read).length
 );
+const readyReviewCount = computed(() => reviewStatusCounts.value.ready ?? 0);
+const partialReviewCount = computed(() => reviewStatusCounts.value.partial ?? 0);
+const pendingReviewCount = computed(() => reviewStatusCounts.value.pending ?? 0);
 const storeName = computed(() => {
   if (settings.value.default_store_id) {
     const matched = me.value?.stores.find((store) => store.id === settings.value.default_store_id);
@@ -260,11 +288,12 @@ async function hydrate() {
   message.value = "";
 
   try {
-    const [meResult, goalResult, suggestionsResult, tasksResult, notificationsResult] = await Promise.all([
+    const [meResult, goalResult, suggestionsResult, tasksResult, reviewsResult, notificationsResult] = await Promise.all([
       extensionApi.me(token.value),
       extensionApi.goal(token.value),
       extensionApi.suggestions(token.value, { status: "ready", page_size: 50 }),
       extensionApi.tasks(token.value, { page_size: 30 }),
+      extensionApi.reviews(token.value, { limit: 30 }),
       extensionApi.notifications(token.value, { limit: 30 })
     ]);
 
@@ -272,6 +301,8 @@ async function hydrate() {
     goal.value = goalResult;
     suggestions.value = suggestionsResult.list;
     tasks.value = tasksResult.list;
+    reviews.value = reviewsResult.list;
+    reviewStatusCounts.value = reviewsResult.status_counts ?? { ready: 0, partial: 0, pending: 0 };
     notifications.value = notificationsResult.list;
     settings.value = await loadExtensionSettings();
   } catch (err) {
@@ -397,7 +428,14 @@ function summarizeImpact(item: Suggestion) {
     .join(" · ");
 }
 
-function formatDate(value: string) {
+function taskTypeOf(taskID: string) {
+  return tasks.value.find((item) => item.id === taskID)?.task_type ?? taskID;
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return "-";
+  }
   return new Date(value).toLocaleString();
 }
 </script>

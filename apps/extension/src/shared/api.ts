@@ -4,6 +4,7 @@ import type {
   LoginResponse,
   MeResponse,
   Notification,
+  ReviewSnapshot,
   Suggestion,
   Task
 } from "@trademate/shared-types";
@@ -24,6 +25,12 @@ export interface TaskPayload {
 export interface NotificationPayload {
   list: Notification[];
   total: number;
+}
+
+export interface ReviewPayload {
+  list: ReviewSnapshot[];
+  total: number;
+  status_counts: Record<string, number>;
 }
 
 export interface ApproveSuggestionResult {
@@ -113,6 +120,10 @@ export const extensionApi = {
   notifications(token: string, input?: { limit?: number }) {
     const query = buildQuery({ limit: input?.limit });
     return request<NotificationPayload>(`/notifications${query}`, token);
+  },
+  reviews(token: string, input?: { limit?: number }) {
+    const query = buildQuery({ limit: input?.limit });
+    return request<ReviewPayload>(`/agents/ad/reviews${query}`, token);
   },
   markNotificationRead(token: string, notificationID: string) {
     return request<{ notification_id: string; is_read: boolean }>(

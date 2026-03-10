@@ -47,7 +47,7 @@ body {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -159,6 +159,12 @@ button.secondary {
   padding: 10px;
 }
 
+.review-item {
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  padding: 10px;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -204,4 +210,24 @@ button.secondary {
 .error {
   color: #b42318;
   margin: 0;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-pill.pending {
+  background: #e4e7eb;
+}
+
+.status-pill.partial {
+  background: #fde68a;
+}
+
+.status-pill.ready {
+  background: #d9f99d;
 }
