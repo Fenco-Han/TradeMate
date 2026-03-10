@@ -32,11 +32,14 @@ type RunOnceInput struct {
 }
 
 type TaskRunResult struct {
-	TaskID   string `json:"task_id"`
-	StoreID  string `json:"store_id"`
-	TaskType string `json:"task_type"`
-	Status   string `json:"status"`
-	Message  string `json:"message"`
+	TaskID        string `json:"task_id"`
+	StoreID       string `json:"store_id"`
+	TaskType      string `json:"task_type"`
+	Status        string `json:"status"`
+	Message       string `json:"message"`
+	Channel       string `json:"channel,omitempty"`
+	ExecutionMode string `json:"execution_mode,omitempty"`
+	AttemptCount  int    `json:"attempt_count,omitempty"`
 }
 
 type RunOnceResult struct {
@@ -97,11 +100,13 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 		if claimErr != nil {
 			result.Skipped++
 			result.Results = append(result.Results, TaskRunResult{
-				TaskID:   item.Task.ID,
-				StoreID:  item.StoreID,
-				TaskType: item.Task.TaskType,
-				Status:   item.Task.Status,
-				Message:  claimErr.Error(),
+				TaskID:        item.Task.ID,
+				StoreID:       item.StoreID,
+				TaskType:      item.Task.TaskType,
+				Status:        item.Task.Status,
+				Message:       claimErr.Error(),
+				Channel:       inferExecutionChannel(item.Task),
+				ExecutionMode: inferExecutionMode(item.Task),
 			})
 			continue
 		}
@@ -112,11 +117,13 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 			if markErr != nil {
 				result.Skipped++
 				result.Results = append(result.Results, TaskRunResult{
-					TaskID:   runningTask.ID,
-					StoreID:  item.StoreID,
-					TaskType: runningTask.TaskType,
-					Status:   runningTask.Status,
-					Message:  fmt.Sprintf("execute failed: %v; mark failed error: %v", execErr, markErr),
+					TaskID:        runningTask.ID,
+					StoreID:       item.StoreID,
+					TaskType:      runningTask.TaskType,
+					Status:        runningTask.Status,
+					Message:       fmt.Sprintf("execute failed: %v; mark failed error: %v", execErr, markErr),
+					Channel:       inferExecutionChannel(runningTask),
+					ExecutionMode: inferExecutionMode(runningTask),
 				})
 				continue
 			}
@@ -129,11 +136,13 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 			_ = notifyTaskStatus(s.repo, item.StoreID, failedTask.ID, failedTask.TaskType, failedTask.Status, truncateMessage(execErr.Error()))
 			result.Failed++
 			result.Results = append(result.Results, TaskRunResult{
-				TaskID:   failedTask.ID,
-				StoreID:  item.StoreID,
-				TaskType: failedTask.TaskType,
-				Status:   failedTask.Status,
-				Message:  truncateMessage(execErr.Error()),
+				TaskID:        failedTask.ID,
+				StoreID:       item.StoreID,
+				TaskType:      failedTask.TaskType,
+				Status:        failedTask.Status,
+				Message:       truncateMessage(execErr.Error()),
+				Channel:       inferExecutionChannel(failedTask),
+				ExecutionMode: inferExecutionMode(failedTask),
 			})
 			continue
 		}
@@ -142,11 +151,13 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 		if markErr != nil {
 			result.Skipped++
 			result.Results = append(result.Results, TaskRunResult{
-				TaskID:   runningTask.ID,
-				StoreID:  item.StoreID,
-				TaskType: runningTask.TaskType,
-				Status:   runningTask.Status,
-				Message:  fmt.Sprintf("mark succeeded error: %v", markErr),
+				TaskID:        runningTask.ID,
+				StoreID:       item.StoreID,
+				TaskType:      runningTask.TaskType,
+				Status:        runningTask.Status,
+				Message:       fmt.Sprintf("mark succeeded error: %v", markErr),
+				Channel:       inferExecutionChannel(runningTask),
+				ExecutionMode: inferExecutionMode(runningTask),
 			})
 			continue
 		}
@@ -159,11 +170,14 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 		_ = notifyTaskStatus(s.repo, item.StoreID, succeededTask.ID, succeededTask.TaskType, succeededTask.Status, execResult.Summary)
 		result.Succeeded++
 		result.Results = append(result.Results, TaskRunResult{
-			TaskID:   succeededTask.ID,
-			StoreID:  item.StoreID,
-			TaskType: succeededTask.TaskType,
-			Status:   succeededTask.Status,
-			Message:  execResult.Summary,
+			TaskID:        succeededTask.ID,
+			StoreID:       item.StoreID,
+			TaskType:      succeededTask.TaskType,
+			Status:        succeededTask.Status,
+			Message:       execResult.Summary,
+			Channel:       strings.TrimSpace(execResult.Channel),
+			ExecutionMode: readStringMetric(execResult.RawResult, "mode"),
+			AttemptCount:  readIntMetric(execResult.RawResult, "attempt_count"),
 		})
 	}
 
@@ -415,6 +429,59 @@ func parseTaskPayload(payloadRaw string) map[string]any {
 		return map[string]any{}
 	}
 	return payload
+}
+
+func inferExecutionChannel(task models.Task) string {
+	payload := parseTaskPayload(task.PayloadJSON)
+	if shouldUseFallback(payload) {
+		return "browser_fallback"
+	}
+	return "api"
+}
+
+func inferExecutionMode(task models.Task) string {
+	payload := parseTaskPayload(task.PayloadJSON)
+	if shouldUseFallback(payload) {
+		return "openclaw_runtime"
+	}
+	return "api_executor"
+}
+
+func readStringMetric(raw map[string]any, key string) string {
+	if raw == nil {
+		return ""
+	}
+	value, exists := raw[key]
+	if !exists {
+		return ""
+	}
+	text := strings.TrimSpace(fmt.Sprint(value))
+	if text == "<nil>" {
+		return ""
+	}
+	return text
+}
+
+func readIntMetric(raw map[string]any, key string) int {
+	if raw == nil {
+		return 0
+	}
+	value, exists := raw[key]
+	if !exists {
+		return 0
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	default:
+		return 0
+	}
 }
 
 func sanitizeJSON(value string) string {

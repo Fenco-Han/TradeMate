@@ -53,6 +53,9 @@ export interface RunTaskItem {
   task_type: string;
   status: string;
   message: string;
+  channel?: string;
+  execution_mode?: string;
+  attempt_count?: number;
 }
 
 export interface RunTasksOnceResult {

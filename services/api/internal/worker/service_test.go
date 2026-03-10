@@ -140,6 +140,15 @@ func TestRunOnceSuccess(t *testing.T) {
 	if len(result.Results) != 1 || result.Results[0].Status != "succeeded" {
 		t.Fatalf("unexpected run details: %+v", result.Results)
 	}
+	if result.Results[0].Channel != "api" {
+		t.Fatalf("expected channel api, got %s", result.Results[0].Channel)
+	}
+	if result.Results[0].ExecutionMode != "api_executor" {
+		t.Fatalf("expected execution_mode api_executor, got %s", result.Results[0].ExecutionMode)
+	}
+	if result.Results[0].AttemptCount != 1 {
+		t.Fatalf("expected attempt_count 1, got %d", result.Results[0].AttemptCount)
+	}
 	if repo.notifications != 1 {
 		t.Fatalf("expected 1 notification, got %d", repo.notifications)
 	}
@@ -190,6 +199,12 @@ func TestRunOnceFailedForInvalidPayload(t *testing.T) {
 	if len(result.Results) != 1 || result.Results[0].Status != "failed" {
 		t.Fatalf("unexpected run details: %+v", result.Results)
 	}
+	if result.Results[0].Channel != "api" {
+		t.Fatalf("expected channel api, got %s", result.Results[0].Channel)
+	}
+	if result.Results[0].ExecutionMode != "api_executor" {
+		t.Fatalf("expected execution_mode api_executor, got %s", result.Results[0].ExecutionMode)
+	}
 	if repo.notifications != 1 {
 		t.Fatalf("expected 1 notification, got %d", repo.notifications)
 	}
@@ -236,6 +251,10 @@ func TestRunOnceFallbackExecution(t *testing.T) {
 			Channel:     "browser_fallback",
 			Status:      "success",
 			Summary:     "fallback ok",
+			RawResult: map[string]any{
+				"mode":          "openclaw_runtime",
+				"attempt_count": 1,
+			},
 		},
 	}
 
@@ -250,6 +269,15 @@ func TestRunOnceFallbackExecution(t *testing.T) {
 	}
 	if fallback.calls != 1 {
 		t.Fatalf("expected fallback runner called once, got %d", fallback.calls)
+	}
+	if result.Results[0].Channel != "browser_fallback" {
+		t.Fatalf("expected channel browser_fallback, got %s", result.Results[0].Channel)
+	}
+	if result.Results[0].ExecutionMode != "openclaw_runtime" {
+		t.Fatalf("expected execution_mode openclaw_runtime, got %s", result.Results[0].ExecutionMode)
+	}
+	if result.Results[0].AttemptCount != 1 {
+		t.Fatalf("expected attempt_count 1, got %d", result.Results[0].AttemptCount)
 	}
 	if len(repo.snapshotWrites) != 1 {
 		t.Fatalf("expected 1 snapshot write, got %d", len(repo.snapshotWrites))

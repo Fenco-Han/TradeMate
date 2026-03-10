@@ -177,6 +177,8 @@ func buildSuccessResult(name, channel string, ctx Context, payload map[string]an
 			"target_type":   ctx.TargetType,
 			"target_id":     ctx.TargetID,
 			"payload":       payload,
+			"mode":          "api_executor",
+			"attempt_count": 1,
 		},
 		Summary:    summary,
 		FinishedAt: time.Now().UTC().Format(time.RFC3339),

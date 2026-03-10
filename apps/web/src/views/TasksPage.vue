@@ -29,6 +29,35 @@
       <p v-if="error" class="error">{{ error }}</p>
     </section>
 
+    <section class="panel" v-if="lastRunResults.length > 0">
+      <div class="filter-row split">
+        <strong>Latest Run Once Results</strong>
+        <span class="hint">共 {{ lastRunResults.length }} 条</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Status</th>
+            <th>Channel</th>
+            <th>Mode</th>
+            <th>Attempt</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in lastRunResults" :key="item.task_id">
+            <td>{{ item.task_type }} / {{ item.task_id }}</td>
+            <td>{{ item.status }}</td>
+            <td>{{ item.channel || "-" }}</td>
+            <td>{{ item.execution_mode || "-" }}</td>
+            <td>{{ item.attempt_count ?? "-" }}</td>
+            <td>{{ item.message }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <section class="panel">
       <div v-if="loading" class="hint">Loading tasks...</div>
       <div v-else-if="tasks.length === 0" class="hint">暂未生成执行任务</div>
@@ -151,7 +180,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ReviewSnapshot, RiskLevel, Task, TaskDetailResponse, TaskStatus } from "@trademate/shared-types";
 import AppShell from "../components/AppShell.vue";
-import { api } from "../lib/api";
+import { api, type RunTaskItem } from "../lib/api";
 import { hydrateSession, sessionState } from "../stores/session";
 
 const router = useRouter();
@@ -168,6 +197,7 @@ const selectedTaskID = ref("");
 const selectedDetail = ref<TaskDetailResponse | null>(null);
 const selectedReview = ref<ReviewSnapshot | null>(null);
 const reviewMap = ref<Record<string, ReviewSnapshot>>({});
+const lastRunResults = ref<RunTaskItem[]>([]);
 
 const storeName = computed(() => sessionState.me?.stores[0]?.store_name ?? "");
 const relatedAuditLogs = computed(() => {
@@ -284,6 +314,7 @@ async function runWorkerOnce() {
   try {
     const result = await api.runTasksOnce({ limit: 20 });
     message.value = `Worker执行完成：成功 ${result.succeeded}，失败 ${result.failed}，跳过 ${result.skipped}`;
+    lastRunResults.value = result.results;
     await loadTasks();
     if (selectedTaskID.value) {
       await loadTaskDetail(selectedTaskID.value);
