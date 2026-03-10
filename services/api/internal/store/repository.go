@@ -1118,6 +1118,21 @@ LIMIT ?`, storeID, limit)
 	return list, nil
 }
 
+func (r *Repository) CreateAuditLog(storeID, actorID, action, targetType, targetID, result, metadata string) error {
+	if strings.TrimSpace(storeID) == "" {
+		storeID = "store_us_001"
+	}
+	if strings.TrimSpace(actorID) == "" {
+		actorID = "system_worker"
+	}
+
+	_, err := r.db.Exec(`
+INSERT INTO audit_log (id, store_id, agent_type, actor_id, action, target_type, target_id, result, metadata_json, created_at)
+VALUES (?, ?, 'ad_agent', ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())`,
+		newID("audit"), storeID, actorID, action, targetType, targetID, result, nullString(metadata))
+	return err
+}
+
 func (r *Repository) ListUserIDsByStore(storeID string) ([]string, error) {
 	rows, err := r.db.Query(`
 SELECT DISTINCT user_id

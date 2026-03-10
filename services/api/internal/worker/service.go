@@ -20,6 +20,7 @@ type Repository interface {
 	UpdateTaskStatus(storeID, actorID, taskID, nextStatus, reason string) (models.Task, error)
 	CreateNotificationForStore(storeID, messageType, priority, title, body string, targetType, targetID *string) error
 	UpsertReviewSnapshot(storeID, taskID, status string, beforeMetrics, afterMetrics map[string]any, summary string) (models.ReviewSnapshot, error)
+	CreateAuditLog(storeID, actorID, action, targetType, targetID, result, metadata string) error
 }
 
 type RunOnceInput struct {
@@ -114,7 +115,9 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 			}
 
 			beforeMetrics, _ := extractMetricsFromTaskPayload(failedTask)
-			_, _ = s.repo.UpsertReviewSnapshot(item.StoreID, failedTask.ID, "partial", beforeMetrics, nil, truncateMessage(execErr.Error()))
+			if _, reviewErr := s.repo.UpsertReviewSnapshot(item.StoreID, failedTask.ID, "partial", beforeMetrics, nil, truncateMessage(execErr.Error())); reviewErr == nil {
+				_ = s.repo.CreateAuditLog(item.StoreID, actorID, "review_generated", "task", failedTask.ID, "success", `{"review_status":"partial","task_status":"failed"}`)
+			}
 			_ = notifyTaskStatus(s.repo, item.StoreID, failedTask.ID, failedTask.TaskType, failedTask.Status, truncateMessage(execErr.Error()))
 			result.Failed++
 			result.Results = append(result.Results, TaskRunResult{
@@ -141,7 +144,9 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 		}
 
 		beforeMetrics, afterMetrics := extractMetricsFromTaskPayload(succeededTask)
-		_, _ = s.repo.UpsertReviewSnapshot(item.StoreID, succeededTask.ID, "ready", beforeMetrics, afterMetrics, execResult.Summary)
+		if _, reviewErr := s.repo.UpsertReviewSnapshot(item.StoreID, succeededTask.ID, "ready", beforeMetrics, afterMetrics, execResult.Summary); reviewErr == nil {
+			_ = s.repo.CreateAuditLog(item.StoreID, actorID, "review_generated", "task", succeededTask.ID, "success", `{"review_status":"ready","task_status":"succeeded"}`)
+		}
 		_ = notifyTaskStatus(s.repo, item.StoreID, succeededTask.ID, succeededTask.TaskType, succeededTask.Status, execResult.Summary)
 		result.Succeeded++
 		result.Results = append(result.Results, TaskRunResult{
