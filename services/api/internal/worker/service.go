@@ -121,8 +121,9 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 				continue
 			}
 
-			beforeMetrics, _ := extractMetricsFromTaskPayload(failedTask)
-			if _, reviewErr := s.repo.UpsertReviewSnapshot(item.StoreID, failedTask.ID, "partial", beforeMetrics, nil, truncateMessage(execErr.Error())); reviewErr == nil {
+			beforeMetrics, afterMetrics := extractMetricsFromTaskPayload(failedTask)
+			beforeMetrics, afterMetrics = annotateExecutionMetadata(failedTask, nil, execErr, beforeMetrics, afterMetrics)
+			if _, reviewErr := s.repo.UpsertReviewSnapshot(item.StoreID, failedTask.ID, "partial", beforeMetrics, afterMetrics, truncateMessage(execErr.Error())); reviewErr == nil {
 				_ = s.repo.CreateAuditLog(item.StoreID, actorID, "review_generated", "task", failedTask.ID, "success", `{"review_status":"partial","task_status":"failed"}`)
 			}
 			_ = notifyTaskStatus(s.repo, item.StoreID, failedTask.ID, failedTask.TaskType, failedTask.Status, truncateMessage(execErr.Error()))
@@ -151,6 +152,7 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 		}
 
 		beforeMetrics, afterMetrics := extractMetricsFromTaskPayload(succeededTask)
+		beforeMetrics, afterMetrics = annotateExecutionMetadata(succeededTask, &execResult, nil, beforeMetrics, afterMetrics)
 		if _, reviewErr := s.repo.UpsertReviewSnapshot(item.StoreID, succeededTask.ID, "ready", beforeMetrics, afterMetrics, execResult.Summary); reviewErr == nil {
 			_ = s.repo.CreateAuditLog(item.StoreID, actorID, "review_generated", "task", succeededTask.ID, "success", `{"review_status":"ready","task_status":"succeeded"}`)
 		}
@@ -322,6 +324,14 @@ func extractMetricsFromTaskPayload(task models.Task) (map[string]any, map[string
 		return beforeMetrics, map[string]any{}
 	}
 
+	if fallbackRequested, ok := payload["force_fallback"].(bool); ok {
+		beforeMetrics["fallback_requested"] = fallbackRequested
+		afterMetrics["fallback_requested"] = fallbackRequested
+	}
+	if relayAttached, ok := payload["relay_attached"].(bool); ok {
+		beforeMetrics["relay_attached"] = relayAttached
+	}
+
 	if nestedBefore, ok := payload["before"].(map[string]any); ok {
 		for key, value := range nestedBefore {
 			beforeMetrics[key] = value
@@ -346,6 +356,59 @@ func extractMetricsFromTaskPayload(task models.Task) (map[string]any, map[string
 		return beforeMetrics, map[string]any{}
 	}
 	return beforeMetrics, afterMetrics
+}
+
+func annotateExecutionMetadata(task models.Task, result *executor.ExecutionResult, execErr error, beforeMetrics, afterMetrics map[string]any) (map[string]any, map[string]any) {
+	if beforeMetrics == nil {
+		beforeMetrics = map[string]any{}
+	}
+	if afterMetrics == nil {
+		afterMetrics = map[string]any{}
+	}
+
+	payload := parseTaskPayload(task.PayloadJSON)
+	fallbackRequested, _ := payload["force_fallback"].(bool)
+	if fallbackRequested {
+		beforeMetrics["planned_channel"] = "browser_fallback"
+	}
+
+	if result != nil {
+		if strings.TrimSpace(result.Channel) != "" {
+			afterMetrics["execution_channel"] = result.Channel
+		}
+		if strings.TrimSpace(result.ExecutionID) != "" {
+			afterMetrics["execution_id"] = result.ExecutionID
+		}
+		if strings.TrimSpace(result.Status) != "" {
+			afterMetrics["execution_status"] = result.Status
+		}
+		if strings.TrimSpace(result.FinishedAt) != "" {
+			afterMetrics["execution_finished_at"] = result.FinishedAt
+		}
+		afterMetrics["fallback_used"] = strings.TrimSpace(result.Channel) == "browser_fallback"
+	}
+
+	if execErr != nil {
+		afterMetrics["execution_status"] = "failed"
+		afterMetrics["failure_reason"] = truncateMessage(execErr.Error())
+		if fallbackRequested {
+			afterMetrics["execution_channel"] = "browser_fallback"
+			afterMetrics["fallback_used"] = true
+		}
+	}
+
+	return beforeMetrics, afterMetrics
+}
+
+func parseTaskPayload(payloadRaw string) map[string]any {
+	payload := map[string]any{}
+	if strings.TrimSpace(payloadRaw) == "" {
+		return payload
+	}
+	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
+		return map[string]any{}
+	}
+	return payload
 }
 
 func sanitizeJSON(value string) string {

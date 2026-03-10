@@ -57,6 +57,7 @@
             <th>Task</th>
             <th>Task Status</th>
             <th>Review Status</th>
+            <th>Execution Channel</th>
             <th>Finished</th>
             <th>Summary</th>
             <th>Action</th>
@@ -70,6 +71,7 @@
             </td>
             <td>{{ task.status }}</td>
             <td>{{ reviewStatusOf(task.id) }}</td>
+            <td>{{ executionChannelOf(task.id) }}</td>
             <td>{{ formatDate(task.finished_at) }}</td>
             <td>{{ reviewMap[task.id]?.summary ?? "-" }}</td>
             <td class="table-actions">
@@ -235,6 +237,33 @@ async function refreshSelectedReview() {
 
 function reviewStatusOf(taskID: string) {
   return reviewMap.value[taskID]?.status ?? "pending";
+}
+
+function executionChannelOf(taskID: string) {
+  const review = reviewMap.value[taskID];
+  if (!review) {
+    return "-";
+  }
+
+  const afterChannel = metricString(review.after_metrics, "execution_channel");
+  if (afterChannel) {
+    return afterChannel;
+  }
+
+  if (metricBoolean(review.after_metrics, "fallback_requested") || metricBoolean(review.before_metrics, "fallback_requested")) {
+    return "browser_fallback(planned)";
+  }
+
+  return "api";
+}
+
+function metricString(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function metricBoolean(metrics: Record<string, unknown> | undefined, key: string) {
+  return metrics?.[key] === true;
 }
 
 function formatDate(value?: string | null) {

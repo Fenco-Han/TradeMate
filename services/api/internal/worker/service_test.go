@@ -17,12 +17,22 @@ type fakeRepo struct {
 	auditLogs       int
 	listQueuedErr   error
 	updateStatusErr map[string]error
+	snapshotWrites  []snapshotWrite
 }
 
 type fakeFallbackRunner struct {
 	result openclaw.BrowserActionResult
 	err    error
 	calls  int
+}
+
+type snapshotWrite struct {
+	storeID string
+	taskID  string
+	status  string
+	before  map[string]any
+	after   map[string]any
+	summary string
 }
 
 func (f *fakeRepo) ListQueuedTasks(limit int, storeID string) ([]store.QueuedTask, error) {
@@ -66,8 +76,16 @@ func (f *fakeRepo) CreateNotificationForStore(_ string, _, _, _, _ string, _, _ 
 	return nil
 }
 
-func (f *fakeRepo) UpsertReviewSnapshot(_, _, _ string, _, _ map[string]any, _ string) (models.ReviewSnapshot, error) {
+func (f *fakeRepo) UpsertReviewSnapshot(storeID, taskID, status string, before, after map[string]any, summary string) (models.ReviewSnapshot, error) {
 	f.reviewSnapshots++
+	f.snapshotWrites = append(f.snapshotWrites, snapshotWrite{
+		storeID: storeID,
+		taskID:  taskID,
+		status:  status,
+		before:  cloneMap(before),
+		after:   cloneMap(after),
+		summary: summary,
+	})
 	return models.ReviewSnapshot{}, nil
 }
 
@@ -82,6 +100,17 @@ func (f *fakeFallbackRunner) RunBrowserAction(_ context.Context, _ openclaw.Brow
 		return openclaw.BrowserActionResult{}, f.err
 	}
 	return f.result, nil
+}
+
+func cloneMap(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = item
+	}
+	return out
 }
 
 func TestRunOnceSuccess(t *testing.T) {
@@ -116,6 +145,18 @@ func TestRunOnceSuccess(t *testing.T) {
 	}
 	if repo.reviewSnapshots != 1 {
 		t.Fatalf("expected 1 review snapshot, got %d", repo.reviewSnapshots)
+	}
+	if len(repo.snapshotWrites) != 1 {
+		t.Fatalf("expected 1 snapshot write, got %d", len(repo.snapshotWrites))
+	}
+	if got := repo.snapshotWrites[0].after["execution_channel"]; got != "api" {
+		t.Fatalf("expected execution_channel=api, got %v", got)
+	}
+	if got := repo.snapshotWrites[0].after["execution_status"]; got != "success" {
+		t.Fatalf("expected execution_status=success, got %v", got)
+	}
+	if got := repo.snapshotWrites[0].after["fallback_used"]; got != false {
+		t.Fatalf("expected fallback_used=false, got %v", got)
 	}
 	if repo.auditLogs != 1 {
 		t.Fatalf("expected 1 audit log, got %d", repo.auditLogs)
@@ -154,6 +195,15 @@ func TestRunOnceFailedForInvalidPayload(t *testing.T) {
 	}
 	if repo.reviewSnapshots != 1 {
 		t.Fatalf("expected 1 review snapshot, got %d", repo.reviewSnapshots)
+	}
+	if len(repo.snapshotWrites) != 1 {
+		t.Fatalf("expected 1 snapshot write, got %d", len(repo.snapshotWrites))
+	}
+	if got := repo.snapshotWrites[0].status; got != "partial" {
+		t.Fatalf("expected review status partial, got %s", got)
+	}
+	if got := repo.snapshotWrites[0].after["execution_status"]; got != "failed" {
+		t.Fatalf("expected execution_status=failed, got %v", got)
 	}
 	if repo.auditLogs != 1 {
 		t.Fatalf("expected 1 audit log, got %d", repo.auditLogs)
@@ -200,6 +250,18 @@ func TestRunOnceFallbackExecution(t *testing.T) {
 	}
 	if fallback.calls != 1 {
 		t.Fatalf("expected fallback runner called once, got %d", fallback.calls)
+	}
+	if len(repo.snapshotWrites) != 1 {
+		t.Fatalf("expected 1 snapshot write, got %d", len(repo.snapshotWrites))
+	}
+	if got := repo.snapshotWrites[0].before["fallback_requested"]; got != true {
+		t.Fatalf("expected fallback_requested=true, got %v", got)
+	}
+	if got := repo.snapshotWrites[0].after["execution_channel"]; got != "browser_fallback" {
+		t.Fatalf("expected execution_channel=browser_fallback, got %v", got)
+	}
+	if got := repo.snapshotWrites[0].after["fallback_used"]; got != true {
+		t.Fatalf("expected fallback_used=true, got %v", got)
 	}
 	if repo.auditLogs < 2 {
 		t.Fatalf("expected at least 2 audit logs, got %d", repo.auditLogs)
