@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fenco/trademate/services/api/internal/ads"
 	"github.com/fenco/trademate/services/api/internal/auth"
 	"github.com/fenco/trademate/services/api/internal/models"
 	"github.com/fenco/trademate/services/api/internal/store"
@@ -16,14 +17,16 @@ import (
 type Handlers struct {
 	repo         *store.Repository
 	tokenService *auth.Service
+	adsClient    *ads.Client
 	hub          *WebSocketHub
 	upgrader     websocket.Upgrader
 }
 
-func NewHandlers(repo *store.Repository, tokenService *auth.Service, hub *WebSocketHub) *Handlers {
+func NewHandlers(repo *store.Repository, tokenService *auth.Service, hub *WebSocketHub, adsClient *ads.Client) *Handlers {
 	return &Handlers{
 		repo:         repo,
 		tokenService: tokenService,
+		adsClient:    adsClient,
 		hub:          hub,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -234,6 +237,18 @@ func (h *Handlers) ListSuggestions(c *gin.Context) {
 	}
 
 	respond(c, http.StatusOK, payload)
+}
+
+func (h *Handlers) GetAdsDataPreview(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+
+	data, err := h.adsClient.FetchPreviewData(c.Request.Context(), storeID)
+	if err != nil {
+		respondErrorCode(c, http.StatusBadGateway, "ADS_UPSTREAM_ERROR", err.Error())
+		return
+	}
+
+	respond(c, http.StatusOK, data)
 }
 
 func (h *Handlers) GetSuggestionDetail(c *gin.Context) {

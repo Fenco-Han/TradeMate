@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/fenco/trademate/services/api/internal/ads"
 	"github.com/fenco/trademate/services/api/internal/auth"
 	"github.com/fenco/trademate/services/api/internal/config"
 	httpapi "github.com/fenco/trademate/services/api/internal/http"
@@ -27,8 +28,9 @@ func NewServer(cfg config.Config) *gin.Engine {
 
 	repo := store.NewRepository(db)
 	tokenService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiresHour)
+	adsClient := ads.NewClient(cfg)
 	hub := httpapi.NewWebSocketHub()
-	handlers := httpapi.NewHandlers(repo, tokenService, hub)
+	handlers := httpapi.NewHandlers(repo, tokenService, hub, adsClient)
 
 	router := gin.Default()
 	router.Use(httpapi.AuthMiddlewareProxy(tokenService))
@@ -49,6 +51,7 @@ func NewServer(cfg config.Config) *gin.Engine {
 		api.DELETE("/agent-goals/:goal_id", handlers.DeleteGoal)
 
 		api.GET("/agents/ad/suggestions", handlers.ListSuggestions)
+		api.GET("/agents/ad/data-preview", handlers.GetAdsDataPreview)
 		api.GET("/agents/ad/suggestions/:suggestion_id", handlers.GetSuggestionDetail)
 		api.POST("/agents/ad/suggestions/:suggestion_id/approve", handlers.ApproveSuggestion)
 		api.POST("/agents/ad/suggestions/:suggestion_id/reject", handlers.RejectSuggestion)

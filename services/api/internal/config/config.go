@@ -4,10 +4,15 @@ import "os"
 import "strconv"
 
 type Config struct {
-	APIPort        string
-	JWTSecret      string
-	JWTExpiresHour int
-	MySQLDSN       string
+	APIPort               string
+	JWTSecret             string
+	JWTExpiresHour        int
+	MySQLDSN              string
+	AmazonAdsClientID     string
+	AmazonAdsClientSecret string
+	AmazonAdsRedirectURI  string
+	AmazonAdsAPIBase      string
+	AmazonAdsTokenURL     string
 }
 
 func Load() Config {
@@ -19,10 +24,15 @@ func Load() Config {
 	}
 
 	return Config{
-		APIPort:        getEnv("API_PORT", "8080"),
-		JWTSecret:      getEnv("JWT_SECRET", "change-me"),
-		JWTExpiresHour: expiresHour,
-		MySQLDSN:       getEnv("MYSQL_DSN", "trademate:trademate@tcp(localhost:3306)/trademate?parseTime=true"),
+		APIPort:               getEnv("API_PORT", "8080"),
+		JWTSecret:             getEnv("JWT_SECRET", "change-me"),
+		JWTExpiresHour:        expiresHour,
+		MySQLDSN:              getEnv("MYSQL_DSN", "trademate:trademate@tcp(localhost:3306)/trademate?parseTime=true"),
+		AmazonAdsClientID:     getEnv("AMAZON_ADS_CLIENT_ID", ""),
+		AmazonAdsClientSecret: getEnv("AMAZON_ADS_CLIENT_SECRET", ""),
+		AmazonAdsRedirectURI:  getEnv("AMAZON_ADS_REDIRECT_URI", ""),
+		AmazonAdsAPIBase:      getEnv("AMAZON_ADS_API_BASE", "https://advertising-api.amazon.com"),
+		AmazonAdsTokenURL:     getEnv("AMAZON_ADS_TOKEN_URL", "https://api.amazon.com/auth/o2/token"),
 	}
 }
 

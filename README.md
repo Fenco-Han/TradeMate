@@ -48,8 +48,9 @@ The repository currently focuses on a DB-backed platform baseline:
 6. Approve/reject suggestions and generate tasks
 7. List/cancel/retry tasks with status transition checks
 8. Notification list/read and WebSocket push (`/api/v1/ws`)
-9. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
-10. Extension popup supports suggestions/tasks/notifications workflows and configurable options
+9. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
+10. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
+11. Extension popup supports suggestions/tasks/notifications workflows and configurable options
 
 ## API conventions
 
