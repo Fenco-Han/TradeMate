@@ -117,8 +117,27 @@
         <div v-else-if="activeTab === 'tasks'" class="tab-pane">
           <div class="row">
             <h3>Recent Tasks</h3>
-            <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
+            <div class="actions-inline">
+              <button class="small secondary" :disabled="loading" @click="runTasksOnce">Run Once</button>
+              <button class="small" :disabled="loading" @click="refreshAll">Refresh</button>
+            </div>
           </div>
+          <section class="run-result-card" v-if="lastRunResults.length > 0">
+            <p class="meta">Latest Run Once Results ({{ lastRunResults.length }})</p>
+            <ul class="popup-list">
+              <li v-for="item in lastRunResults" :key="`run-${item.task_id}`">
+                <div class="row">
+                  <strong>{{ item.task_type }}</strong>
+                  <span class="status-pill">{{ item.status }}</span>
+                </div>
+                <p class="meta">
+                  Channel: {{ item.channel || "-" }} · Mode: {{ item.execution_mode || "-" }} · Attempt:
+                  {{ item.attempt_count ?? "-" }}
+                </p>
+                <p>{{ item.message }}</p>
+              </li>
+            </ul>
+          </section>
           <ul class="popup-list">
             <li v-for="task in tasks" :key="task.id">
               <div class="row">
@@ -204,7 +223,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import type { AdGoal, MeResponse, Notification, ReviewSnapshot, Suggestion, Task } from "@trademate/shared-types";
-import { extensionApi } from "../shared/api";
+import { extensionApi, type RunTaskItem } from "../shared/api";
 import { DEFAULT_SETTINGS, loadExtensionSettings, type ExtensionSettings } from "../shared/settings";
 
 const account = ref("demo@trademate.dev");
@@ -221,6 +240,7 @@ const suggestions = ref<Suggestion[]>([]);
 const tasks = ref<Task[]>([]);
 const reviews = ref<ReviewSnapshot[]>([]);
 const notifications = ref<Notification[]>([]);
+const lastRunResults = ref<RunTaskItem[]>([]);
 const reviewStatusCounts = ref<Record<string, number>>({
   ready: 0,
   partial: 0,
@@ -398,6 +418,26 @@ async function retryTask(taskID: string) {
     await hydrate();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Retry failed";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function runTasksOnce() {
+  if (!token.value) {
+    return;
+  }
+
+  loading.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    const result = await extensionApi.runTasksOnce(token.value, { limit: 20 });
+    lastRunResults.value = result.results;
+    message.value = `Run Once完成：成功 ${result.succeeded}，失败 ${result.failed}，跳过 ${result.skipped}`;
+    await hydrate();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Run once failed";
   } finally {
     loading.value = false;
   }

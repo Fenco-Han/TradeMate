@@ -33,6 +33,25 @@ export interface ReviewPayload {
   status_counts: Record<string, number>;
 }
 
+export interface RunTaskItem {
+  task_id: string;
+  store_id: string;
+  task_type: string;
+  status: string;
+  message: string;
+  channel?: string;
+  execution_mode?: string;
+  attempt_count?: number;
+}
+
+export interface RunTasksOnceResult {
+  picked: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  results: RunTaskItem[];
+}
+
 export interface ApproveSuggestionResult {
   approval_id: string;
   task_id: string;
@@ -115,6 +134,12 @@ export const extensionApi = {
   retryTask(token: string, taskID: string) {
     return request<Task>(`/tasks/${taskID}/retry`, token, {
       method: "POST"
+    });
+  },
+  runTasksOnce(token: string, input?: { limit?: number }) {
+    return request<RunTasksOnceResult>("/tasks/run-once", token, {
+      method: "POST",
+      body: JSON.stringify({ limit: input?.limit ?? 20 })
     });
   },
   notifications(token: string, input?: { limit?: number }) {
