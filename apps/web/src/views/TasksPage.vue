@@ -23,6 +23,7 @@
           </select>
         </label>
         <button :disabled="loading" @click="loadTasks">Refresh</button>
+        <button :disabled="loading" @click="runWorkerOnce">Run Once</button>
       </div>
       <p v-if="message" class="hint">{{ message }}</p>
       <p v-if="error" class="error">{{ error }}</p>
@@ -156,6 +157,22 @@ async function retryTask(taskID: string) {
     await loadTasks();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Retry failed";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function runWorkerOnce() {
+  loading.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const result = await api.runTasksOnce({ limit: 20 });
+    message.value = `Worker执行完成：成功 ${result.succeeded}，失败 ${result.failed}，跳过 ${result.skipped}`;
+    await loadTasks();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Run worker failed";
   } finally {
     loading.value = false;
   }

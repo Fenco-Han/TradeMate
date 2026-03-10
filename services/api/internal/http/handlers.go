@@ -10,6 +10,7 @@ import (
 	"github.com/fenco/trademate/services/api/internal/auth"
 	"github.com/fenco/trademate/services/api/internal/models"
 	"github.com/fenco/trademate/services/api/internal/store"
+	"github.com/fenco/trademate/services/api/internal/worker"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -18,15 +19,17 @@ type Handlers struct {
 	repo         *store.Repository
 	tokenService *auth.Service
 	adsClient    *ads.Client
+	worker       *worker.Service
 	hub          *WebSocketHub
 	upgrader     websocket.Upgrader
 }
 
-func NewHandlers(repo *store.Repository, tokenService *auth.Service, hub *WebSocketHub, adsClient *ads.Client) *Handlers {
+func NewHandlers(repo *store.Repository, tokenService *auth.Service, hub *WebSocketHub, adsClient *ads.Client, workerService *worker.Service) *Handlers {
 	return &Handlers{
 		repo:         repo,
 		tokenService: tokenService,
 		adsClient:    adsClient,
+		worker:       workerService,
 		hub:          hub,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -437,6 +440,44 @@ func (h *Handlers) RetryTask(c *gin.Context) {
 
 	publishTaskEvent(h, storeID, taskID, task.Status)
 	respond(c, http.StatusOK, task)
+}
+
+func (h *Handlers) RunTasksOnce(c *gin.Context) {
+	if h.worker == nil {
+		respondErrorCode(c, http.StatusServiceUnavailable, "WORKER_DISABLED", "worker service unavailable")
+		return
+	}
+
+	storeID := contextValue(c, ctxActiveStoreKey)
+	userID := contextValue(c, ctxUserIDKey)
+
+	var input struct {
+		Limit int `json:"limit"`
+	}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&input); err != nil {
+			respondErrorCode(c, http.StatusBadRequest, "INVALID_PAYLOAD", "invalid payload")
+			return
+		}
+	}
+
+	result, err := h.worker.RunOnce(c.Request.Context(), worker.RunOnceInput{
+		StoreID: storeID,
+		Limit:   input.Limit,
+		ActorID: userID,
+	})
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	for _, item := range result.Results {
+		if item.Status == "succeeded" || item.Status == "failed" {
+			publishTaskEvent(h, item.StoreID, item.TaskID, item.Status)
+		}
+	}
+
+	respond(c, http.StatusOK, result)
 }
 
 func (h *Handlers) ListNotifications(c *gin.Context) {

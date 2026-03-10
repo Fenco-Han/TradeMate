@@ -449,6 +449,26 @@
 1. 仅 `failed` 状态允许
 2. 高风险任务需要再次审批
 
+### 5.13.1 手动触发任务 Worker（开发调试）
+
+`POST /api/v1/tasks/run-once`
+
+请求：
+
+```json
+{
+  "limit": 20
+}
+```
+
+返回字段：
+
+1. picked
+2. succeeded
+3. failed
+4. skipped
+5. results（task_id / status / message）
+
 ### 5.14 获取复盘
 
 `GET /api/v1/agents/ad/reviews/{task_id}`

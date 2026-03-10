@@ -28,6 +28,11 @@ type TaskFilter struct {
 	PageSize  int
 }
 
+type QueuedTask struct {
+	StoreID string
+	Task    models.Task
+}
+
 func (r *Repository) Login(account, password string) (models.User, string, string, error) {
 	row := r.db.QueryRow(`
 SELECT id, email, phone, display_name, status, password_hash
@@ -742,6 +747,47 @@ LIMIT 1`, taskID, storeID)
 	return task, nil
 }
 
+func (r *Repository) ListQueuedTasks(limit int, storeID string) ([]QueuedTask, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	where := []string{"status = 'queued'"}
+	args := make([]any, 0, 2)
+	if strings.TrimSpace(storeID) != "" {
+		where = append(where, "store_id = ?")
+		args = append(args, storeID)
+	}
+	whereClause := strings.Join(where, " AND ")
+
+	query := fmt.Sprintf(`
+SELECT store_id, id, agent_type, suggestion_id, approval_id, task_type, target_type, target_id,
+       risk_level, payload_json, status, retry_count, failure_reason, created_by,
+       approved_by, executed_at, finished_at, created_at
+FROM task
+WHERE %s
+ORDER BY created_at ASC
+LIMIT ?`, whereClause)
+	args = append(args, limit)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]QueuedTask, 0)
+	for rows.Next() {
+		item, scanErr := scanQueuedTask(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		list = append(list, item)
+	}
+
+	return list, nil
+}
+
 func (r *Repository) ListTaskEvents(taskID string) ([]models.TaskEvent, error) {
 	rows, err := r.db.Query(`
 SELECT id, task_id, from_status, to_status, event_type, event_payload_json, created_at
@@ -807,6 +853,9 @@ FOR UPDATE`, taskID, storeID)
 	if nextStatus == "queued" && riskLevel == "high" {
 		return models.Task{}, ErrApprovalRequired
 	}
+	if strings.TrimSpace(actorID) == "" {
+		actorID = "system_worker"
+	}
 
 	if err := ValidateTaskTransition(currentStatus, nextStatus); err != nil {
 		return models.Task{}, fmt.Errorf("%w: %v", ErrInvalidTransition, err)
@@ -817,10 +866,31 @@ FOR UPDATE`, taskID, storeID)
 		retryDelta = 1
 	}
 
-	_, err = tx.Exec(`
+	executedAtExpr := "executed_at"
+	finishedAtExpr := "finished_at"
+	switch nextStatus {
+	case "running":
+		executedAtExpr = "COALESCE(executed_at, UTC_TIMESTAMP())"
+		finishedAtExpr = "NULL"
+	case "succeeded", "failed", "cancelled":
+		finishedAtExpr = "UTC_TIMESTAMP()"
+	case "queued":
+		if currentStatus == "failed" {
+			executedAtExpr = "NULL"
+			finishedAtExpr = "NULL"
+		}
+	}
+
+	failureReason := any(nil)
+	if nextStatus == "failed" {
+		failureReason = nullString(reason)
+	}
+
+	updateSQL := fmt.Sprintf(`
 UPDATE task
-SET status = ?, retry_count = retry_count + ?, failure_reason = ?, updated_at = UTC_TIMESTAMP()
-WHERE id = ?`, nextStatus, retryDelta, nullString(reason), taskID)
+SET status = ?, retry_count = retry_count + ?, failure_reason = ?, executed_at = %s, finished_at = %s, updated_at = UTC_TIMESTAMP()
+WHERE id = ?`, executedAtExpr, finishedAtExpr)
+	_, err = tx.Exec(updateSQL, nextStatus, retryDelta, failureReason, taskID)
 	if err != nil {
 		return models.Task{}, err
 	}
@@ -1258,6 +1328,46 @@ func scanTask(scanner interface {
 		item.FinishedAt = &finishStr
 	}
 	item.CreatedAt = toRFC3339(createdAt)
+
+	return item, nil
+}
+
+func scanQueuedTask(scanner interface {
+	Scan(dest ...any) error
+}) (QueuedTask, error) {
+	var item QueuedTask
+	var approvalID sql.NullString
+	var failureReason sql.NullString
+	var approvedBy sql.NullString
+	var executedAt sql.NullTime
+	var finishedAt sql.NullTime
+	var createdAt time.Time
+
+	if err := scanner.Scan(&item.StoreID, &item.Task.ID, &item.Task.AgentType, &item.Task.SuggestionID, &approvalID,
+		&item.Task.TaskType, &item.Task.TargetType, &item.Task.TargetID, &item.Task.RiskLevel,
+		&item.Task.PayloadJSON, &item.Task.Status, &item.Task.RetryCount, &failureReason,
+		&item.Task.CreatedBy, &approvedBy, &executedAt, &finishedAt, &createdAt); err != nil {
+		return QueuedTask{}, err
+	}
+
+	if approvalID.Valid {
+		item.Task.ApprovalID = &approvalID.String
+	}
+	if failureReason.Valid {
+		item.Task.FailureReason = &failureReason.String
+	}
+	if approvedBy.Valid {
+		item.Task.ApprovedBy = &approvedBy.String
+	}
+	if executedAt.Valid {
+		execStr := toRFC3339(executedAt.Time)
+		item.Task.ExecutedAt = &execStr
+	}
+	if finishedAt.Valid {
+		finishStr := toRFC3339(finishedAt.Time)
+		item.Task.FinishedAt = &finishStr
+	}
+	item.Task.CreatedAt = toRFC3339(createdAt)
 
 	return item, nil
 }

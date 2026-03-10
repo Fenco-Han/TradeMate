@@ -1,4 +1,4 @@
-.PHONY: infra-up infra-down migrate-up migrate-down migrate-reset dev dev-api dev-web dev-extension build typecheck test
+.PHONY: infra-up infra-down migrate-up migrate-down migrate-reset dev dev-api dev-web dev-extension dev-worker worker-once build typecheck test
 
 infra-up:
 	docker compose up -d
@@ -31,6 +31,12 @@ dev-web:
 
 dev-extension:
 	pnpm --filter @trademate/extension dev
+
+dev-worker:
+	go run ./services/api/cmd/worker -mode loop -interval 10s
+
+worker-once:
+	go run ./services/api/cmd/worker -mode once
 
 build:
 	pnpm build

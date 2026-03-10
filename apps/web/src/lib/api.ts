@@ -39,6 +39,22 @@ export interface ApproveSuggestionResult {
   task_status: string;
 }
 
+export interface RunTaskItem {
+  task_id: string;
+  store_id: string;
+  task_type: string;
+  status: string;
+  message: string;
+}
+
+export interface RunTasksOnceResult {
+  picked: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  results: RunTaskItem[];
+}
+
 function getToken() {
   return localStorage.getItem("trademate.token") ?? "";
 }
@@ -173,6 +189,12 @@ export const api = {
   retryTask(taskID: string) {
     return request<Task>(`/tasks/${taskID}/retry`, {
       method: "POST"
+    });
+  },
+  runTasksOnce(input?: { limit?: number }) {
+    return request<RunTasksOnceResult>("/tasks/run-once", {
+      method: "POST",
+      body: JSON.stringify({ limit: input?.limit ?? 20 })
     });
   },
   listNotifications(input?: { limit?: number }) {

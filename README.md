@@ -32,9 +32,10 @@ docs/
 
 Useful commands:
 
-1. `make dev-api` / `make dev-web` / `make dev-extension`
+1. `make dev-api` / `make dev-web` / `make dev-extension` / `make dev-worker`
 2. `make migrate-up` / `make migrate-down` / `make migrate-reset`
-3. `pnpm typecheck` / `pnpm build`
+3. `make worker-once` (run task worker once)
+4. `pnpm typecheck` / `pnpm build`
 
 ## Current status
 
@@ -47,10 +48,12 @@ The repository currently focuses on a DB-backed platform baseline:
 5. Fetch suggestion list and detail
 6. Approve/reject suggestions and generate tasks
 7. List/cancel/retry tasks with status transition checks
-8. Notification list/read and WebSocket push (`/api/v1/ws`)
-9. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
-10. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
-11. Extension popup supports suggestions/tasks/notifications workflows and configurable options
+8. Task Worker closes the loop from `queued -> running -> succeeded/failed`
+9. Manual task run trigger endpoint: `POST /api/v1/tasks/run-once`
+10. Notification list/read and WebSocket push (`/api/v1/ws`)
+11. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
+12. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
+13. Extension popup supports suggestions/tasks/notifications workflows and configurable options
 
 ## API conventions
 
