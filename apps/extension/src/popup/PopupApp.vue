@@ -126,6 +126,10 @@
                 <span :class="['risk-pill', task.risk_level]">{{ task.risk_level }}</span>
               </div>
               <p>Status: {{ task.status }} · Retry: {{ task.retry_count }}</p>
+              <p class="meta">
+                Channel: {{ taskChannel(task.id) }} · Review: {{ taskReviewStatus(task.id) }} · Mode: {{ taskExecutionMode(task.id) }}
+              </p>
+              <p class="meta">Attempt: {{ taskAttemptCount(task.id) }}</p>
               <p v-if="task.failure_reason" class="error">{{ task.failure_reason }}</p>
               <div class="row actions-inline">
                 <button
@@ -237,6 +241,13 @@ const unreadNotifications = computed(
 const readyReviewCount = computed(() => reviewStatusCounts.value.ready ?? 0);
 const partialReviewCount = computed(() => reviewStatusCounts.value.partial ?? 0);
 const pendingReviewCount = computed(() => reviewStatusCounts.value.pending ?? 0);
+const reviewMap = computed(() => {
+  const mapping: Record<string, ReviewSnapshot> = {};
+  for (const item of reviews.value) {
+    mapping[item.task_id] = item;
+  }
+  return mapping;
+});
 const storeName = computed(() => {
   if (settings.value.default_store_id) {
     const matched = me.value?.stores.find((store) => store.id === settings.value.default_store_id);
@@ -430,6 +441,51 @@ function summarizeImpact(item: Suggestion) {
 
 function taskTypeOf(taskID: string) {
   return tasks.value.find((item) => item.id === taskID)?.task_type ?? taskID;
+}
+
+function taskReviewStatus(taskID: string) {
+  return reviewMap.value[taskID]?.status ?? "pending";
+}
+
+function taskChannel(taskID: string) {
+  const review = reviewMap.value[taskID];
+  if (!review) {
+    return "-";
+  }
+
+  const executionChannel = metricString(review.after_metrics, "execution_channel");
+  if (executionChannel) {
+    return executionChannel;
+  }
+
+  if (metricBoolean(review.after_metrics, "fallback_requested") || metricBoolean(review.before_metrics, "fallback_requested")) {
+    return "browser_fallback(planned)";
+  }
+
+  return "api";
+}
+
+function taskExecutionMode(taskID: string) {
+  return metricString(reviewMap.value[taskID]?.after_metrics, "execution_mode") || "-";
+}
+
+function taskAttemptCount(taskID: string) {
+  const value = metricNumber(reviewMap.value[taskID]?.after_metrics, "execution_attempt_count");
+  return value > 0 ? String(value) : "-";
+}
+
+function metricString(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function metricBoolean(metrics: Record<string, unknown> | undefined, key: string) {
+  return metrics?.[key] === true;
+}
+
+function metricNumber(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key];
+  return typeof value === "number" ? value : 0;
 }
 
 function formatDate(value?: string) {
