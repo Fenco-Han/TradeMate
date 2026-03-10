@@ -386,6 +386,12 @@ func annotateExecutionMetadata(task models.Task, result *executor.ExecutionResul
 			afterMetrics["execution_finished_at"] = result.FinishedAt
 		}
 		afterMetrics["fallback_used"] = strings.TrimSpace(result.Channel) == "browser_fallback"
+		if mode, ok := result.RawResult["mode"].(string); ok && strings.TrimSpace(mode) != "" {
+			afterMetrics["execution_mode"] = mode
+		}
+		if attemptCount, exists := result.RawResult["attempt_count"]; exists {
+			afterMetrics["execution_attempt_count"] = attemptCount
+		}
 	}
 
 	if execErr != nil {

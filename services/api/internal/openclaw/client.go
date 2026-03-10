@@ -92,6 +92,10 @@ func (c *Client) runViaRuntime(ctx context.Context, req BrowserActionRequest) (B
 	for attempt := 1; attempt <= 2; attempt++ {
 		result, retryable, callErr := c.callRuntimeOnce(ctx, req, bodyRaw)
 		if callErr == nil {
+			if result.RawResult == nil {
+				result.RawResult = map[string]any{}
+			}
+			result.RawResult["attempt_count"] = attempt
 			return result, nil
 		}
 		lastErr = callErr
@@ -149,10 +153,11 @@ func runMock(req BrowserActionRequest) BrowserActionResult {
 		Status:      "success",
 		Summary:     summary,
 		RawResult: map[string]any{
-			"task_id":     req.TaskID,
-			"store_id":    req.StoreID,
-			"action_name": req.ActionName,
-			"mode":        "openclaw_mock",
+			"task_id":       req.TaskID,
+			"store_id":      req.StoreID,
+			"action_name":   req.ActionName,
+			"mode":          "openclaw_mock",
+			"attempt_count": 1,
 		},
 		FinishedAt: time.Now().UTC().Format(time.RFC3339),
 	}

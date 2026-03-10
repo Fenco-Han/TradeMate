@@ -43,6 +43,9 @@ func TestRunBrowserActionSuccess(t *testing.T) {
 	if mode, ok := result.RawResult["mode"]; !ok || mode != "openclaw_mock" {
 		t.Fatalf("expected mock mode, got %+v", result.RawResult)
 	}
+	if attempts, ok := result.RawResult["attempt_count"]; !ok || attempts != 1 {
+		t.Fatalf("expected attempt_count=1, got %+v", result.RawResult)
+	}
 }
 
 func TestRunBrowserActionRuntimeSuccess(t *testing.T) {
@@ -97,6 +100,9 @@ func TestRunBrowserActionRuntimeSuccess(t *testing.T) {
 	}
 	if result.Summary != "runtime ok" {
 		t.Fatalf("unexpected summary: %s", result.Summary)
+	}
+	if attempts, ok := result.RawResult["attempt_count"]; !ok || attempts != 1 {
+		t.Fatalf("expected attempt_count=1, got %+v", result.RawResult)
 	}
 }
 
@@ -195,6 +201,9 @@ func TestRunBrowserActionRuntimeRetryThenSuccess(t *testing.T) {
 	}
 	if result.ExecutionID != "oc_retry_ok" {
 		t.Fatalf("unexpected execution id: %s", result.ExecutionID)
+	}
+	if attempts, ok := result.RawResult["attempt_count"]; !ok || attempts != 2 {
+		t.Fatalf("expected attempt_count=2, got %+v", result.RawResult)
 	}
 	if calls != 2 {
 		t.Fatalf("expected calls=2, got %d", calls)
