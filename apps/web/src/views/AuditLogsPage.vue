@@ -6,6 +6,15 @@
           Search
           <input v-model="keyword" placeholder="action / target / actor" />
         </label>
+        <label>
+          Action Scope
+          <select v-model="actionScope">
+            <option value="all">All</option>
+            <option value="fallback">Fallback</option>
+            <option value="review">Review</option>
+            <option value="task">Task</option>
+          </select>
+        </label>
         <div class="actions-row">
           <button :disabled="loading" @click="loadAuditLogs">Refresh</button>
         </div>
@@ -58,22 +67,36 @@ const loading = ref(false);
 const error = ref("");
 const message = ref("");
 const keyword = ref("");
+const actionScope = ref<"all" | "fallback" | "review" | "task">("all");
 const logs = ref<AuditLog[]>([]);
 
 const storeName = computed(() => sessionState.me?.stores[0]?.store_name ?? "");
 
 const filteredLogs = computed(() => {
   const normalizedKeyword = keyword.value.trim().toLowerCase();
-  if (normalizedKeyword === "") {
-    return logs.value;
-  }
-
   return logs.value.filter((item) => {
+    const action = item.action.toLowerCase();
+
+    if (actionScope.value === "fallback" && !action.startsWith("task_fallback_")) {
+      return false;
+    }
+    if (actionScope.value === "review" && action !== "review_generated") {
+      return false;
+    }
+    if (actionScope.value === "task" && !action.startsWith("task_")) {
+      return false;
+    }
+
+    if (normalizedKeyword === "") {
+      return true;
+    }
+
     return (
       item.action.toLowerCase().includes(normalizedKeyword) ||
       item.actor_id.toLowerCase().includes(normalizedKeyword) ||
       item.target_type.toLowerCase().includes(normalizedKeyword) ||
-      item.target_id.toLowerCase().includes(normalizedKeyword)
+      item.target_id.toLowerCase().includes(normalizedKeyword) ||
+      (item.metadata_json ?? "").toLowerCase().includes(normalizedKeyword)
     );
   });
 });
