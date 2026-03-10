@@ -99,6 +99,32 @@ export interface Task {
   created_at: string;
 }
 
+export interface TaskEvent {
+  id: string;
+  task_id: string;
+  from_status?: string | null;
+  to_status: string;
+  event_type: string;
+  event_payload_json?: string | null;
+  created_at: string;
+}
+
+export interface TaskExecutionContext {
+  channel: string;
+  execution_id?: string | null;
+  status: string;
+  fallback_used: boolean;
+  fallback_requested: boolean;
+}
+
+export interface TaskDetailResponse {
+  task: Task;
+  task_events: TaskEvent[];
+  audit_logs: AuditLog[];
+  review_status: string;
+  execution: TaskExecutionContext;
+}
+
 export interface Notification {
   id: string;
   user_id: string;

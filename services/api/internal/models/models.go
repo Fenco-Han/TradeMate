@@ -202,11 +202,20 @@ type TaskListItem struct {
 	ReviewStatus string     `json:"review_status"`
 }
 
+type TaskExecutionContext struct {
+	Channel           string  `json:"channel"`
+	ExecutionID       *string `json:"execution_id,omitempty"`
+	Status            string  `json:"status"`
+	FallbackUsed      bool    `json:"fallback_used"`
+	FallbackRequested bool    `json:"fallback_requested"`
+}
+
 type TaskDetailResponse struct {
-	Task         Task        `json:"task"`
-	TaskEvents   []TaskEvent `json:"task_events"`
-	AuditLogs    []AuditLog  `json:"audit_logs"`
-	ReviewStatus string      `json:"review_status"`
+	Task         Task                 `json:"task"`
+	TaskEvents   []TaskEvent          `json:"task_events"`
+	AuditLogs    []AuditLog           `json:"audit_logs"`
+	ReviewStatus string               `json:"review_status"`
+	Execution    TaskExecutionContext `json:"execution"`
 }
 
 type APIResponse[T any] struct {

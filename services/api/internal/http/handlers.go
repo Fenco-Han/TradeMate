@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -405,14 +406,16 @@ func (h *Handlers) GetTask(c *gin.Context) {
 	}
 
 	reviewStatus := "pending"
-	snapshot, err := h.repo.GetReviewSnapshot(storeID, taskID)
+	var snapshot *models.ReviewSnapshot
+	review, err := h.repo.GetReviewSnapshot(storeID, taskID)
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {
 			respondError(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 	} else {
-		reviewStatus = snapshot.Status
+		reviewStatus = review.Status
+		snapshot = &review
 	}
 
 	respond(c, http.StatusOK, models.TaskDetailResponse{
@@ -420,6 +423,7 @@ func (h *Handlers) GetTask(c *gin.Context) {
 		TaskEvents:   events,
 		AuditLogs:    auditLogs,
 		ReviewStatus: reviewStatus,
+		Execution:    deriveTaskExecutionContext(task, snapshot),
 	})
 }
 
@@ -663,4 +667,70 @@ func parseIntOrDefault(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func deriveTaskExecutionContext(task models.Task, snapshot *models.ReviewSnapshot) models.TaskExecutionContext {
+	context := models.TaskExecutionContext{
+		Channel: "api",
+		Status:  deriveExecutionStatus(task.Status),
+	}
+
+	payload := parseTaskPayloadJSON(task.PayloadJSON)
+	if fallbackRequested, ok := payload["force_fallback"].(bool); ok && fallbackRequested {
+		context.FallbackRequested = true
+		context.Channel = "browser_fallback"
+	}
+
+	if snapshot == nil {
+		return context
+	}
+
+	if fallbackRequested, ok := snapshot.BeforeMetrics["fallback_requested"].(bool); ok {
+		context.FallbackRequested = fallbackRequested
+	}
+	if fallbackRequested, ok := snapshot.AfterMetrics["fallback_requested"].(bool); ok {
+		context.FallbackRequested = fallbackRequested
+	}
+	if executionChannel, ok := snapshot.AfterMetrics["execution_channel"].(string); ok && strings.TrimSpace(executionChannel) != "" {
+		context.Channel = executionChannel
+	}
+	if executionStatus, ok := snapshot.AfterMetrics["execution_status"].(string); ok && strings.TrimSpace(executionStatus) != "" {
+		context.Status = executionStatus
+	}
+	if executionID, ok := snapshot.AfterMetrics["execution_id"].(string); ok && strings.TrimSpace(executionID) != "" {
+		context.ExecutionID = &executionID
+	}
+	if fallbackUsed, ok := snapshot.AfterMetrics["fallback_used"].(bool); ok {
+		context.FallbackUsed = fallbackUsed
+	}
+	if context.FallbackRequested && context.Channel == "api" {
+		context.Channel = "browser_fallback"
+	}
+	if !context.FallbackUsed && context.Channel == "browser_fallback" && (context.Status == "success" || context.Status == "failed") {
+		context.FallbackUsed = true
+	}
+
+	return context
+}
+
+func deriveExecutionStatus(taskStatus string) string {
+	switch taskStatus {
+	case "succeeded":
+		return "success"
+	case "failed", "cancelled":
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
+func parseTaskPayloadJSON(payloadRaw string) map[string]any {
+	payload := map[string]any{}
+	if strings.TrimSpace(payloadRaw) == "" {
+		return payload
+	}
+	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
+		return map[string]any{}
+	}
+	return payload
 }
