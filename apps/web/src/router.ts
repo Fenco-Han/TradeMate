@@ -5,6 +5,7 @@ import DashboardPage from "./views/DashboardPage.vue";
 import GoalsPage from "./views/GoalsPage.vue";
 import LoginPage from "./views/LoginPage.vue";
 import NotificationsPage from "./views/NotificationsPage.vue";
+import ReviewsPage from "./views/ReviewsPage.vue";
 import TasksPage from "./views/TasksPage.vue";
 
 export const router = createRouter({
@@ -33,6 +34,10 @@ export const router = createRouter({
     {
       path: "/tasks",
       component: TasksPage
+    },
+    {
+      path: "/reviews",
+      component: ReviewsPage
     },
     {
       path: "/notifications",

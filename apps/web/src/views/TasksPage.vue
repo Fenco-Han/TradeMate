@@ -56,6 +56,7 @@
             <td>{{ formatDate(task.created_at) }}</td>
             <td>{{ task.failure_reason || "-" }}</td>
             <td class="table-actions">
+              <button class="small" :disabled="loading" @click="openReview(task.id)">Review</button>
               <button
                 class="small secondary"
                 :disabled="loading || task.status !== 'queued'"
@@ -180,5 +181,9 @@ async function runWorkerOnce() {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString();
+}
+
+function openReview(taskID: string) {
+  void router.push({ path: "/reviews", query: { task_id: taskID } });
 }
 </script>
