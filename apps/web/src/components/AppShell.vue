@@ -5,6 +5,8 @@
       <router-link to="/dashboard">Dashboard</router-link>
       <router-link to="/approvals">Approvals</router-link>
       <router-link to="/tasks">Tasks</router-link>
+      <router-link to="/notifications">Notifications</router-link>
+      <router-link to="/audit-logs">Audit Logs</router-link>
       <router-link to="/goals">Goals</router-link>
     </aside>
     <main class="content">

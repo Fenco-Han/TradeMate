@@ -1,8 +1,10 @@
 import type {
   AdGoal,
+  AuditLog,
   ApiResponse,
   LoginResponse,
   MeResponse,
+  Notification,
   Suggestion,
   Task,
   RiskLevel
@@ -18,6 +20,16 @@ export interface SuggestionsPayload {
 
 export interface TasksPayload {
   list: Task[];
+  total: number;
+}
+
+export interface NotificationsPayload {
+  list: Notification[];
+  total: number;
+}
+
+export interface AuditLogsPayload {
+  list: AuditLog[];
   total: number;
 }
 
@@ -162,5 +174,25 @@ export const api = {
     return request<Task>(`/tasks/${taskID}/retry`, {
       method: "POST"
     });
+  },
+  listNotifications(input?: { limit?: number }) {
+    const query = buildQuery({
+      limit: input?.limit
+    });
+    return request<NotificationsPayload>(`/notifications${query}`);
+  },
+  markNotificationRead(notificationID: string) {
+    return request<{ notification_id: string; is_read: boolean }>(
+      `/notifications/${notificationID}/read`,
+      {
+        method: "POST"
+      }
+    );
+  },
+  listAuditLogs(input?: { limit?: number }) {
+    const query = buildQuery({
+      limit: input?.limit
+    });
+    return request<AuditLogsPayload>(`/audit-logs${query}`);
   }
 };

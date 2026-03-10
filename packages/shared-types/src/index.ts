@@ -113,6 +113,18 @@ export interface Notification {
   created_at: string;
 }
 
+export interface AuditLog {
+  id: string;
+  agent_type: string;
+  actor_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  result: string;
+  metadata_json?: string | null;
+  created_at: string;
+}
+
 export interface MeResponse {
   user: User;
   roles: RoleAssignment[];
