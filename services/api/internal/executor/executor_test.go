@@ -37,6 +37,11 @@ func TestRegistryGet(t *testing.T) {
 	if _, ok := registry.Get("budget_increase"); !ok {
 		t.Fatalf("budget_increase executor should exist")
 	}
+	if pauseExecutor, ok := registry.Get("pause_keyword"); !ok {
+		t.Fatalf("pause_keyword executor should exist")
+	} else if err := pauseExecutor.Validate(Context{}, map[string]any{"keyword_id": "kw_001"}); err != nil {
+		t.Fatalf("pause_keyword validate failed: %v", err)
+	}
 	if _, ok := registry.Get("not_exists"); ok {
 		t.Fatalf("unexpected executor found")
 	}

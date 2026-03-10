@@ -2,7 +2,7 @@
 
 **文档版本**：V1.0  
 **适用范围**：V1 广告 Agent  
-**目的**：定义 7 类正式动作的统一执行器接口
+**目的**：定义 V1 动作的统一执行器接口
 
 ## 1. 通用执行器接口
 
@@ -181,6 +181,25 @@ type ActionExecutor interface {
 }
 ```
 
+### 4.8 pause_keyword
+
+#### 默认通道
+
+`api`
+
+#### 备用通道
+
+`browser_fallback`
+
+#### payload
+
+```json
+{
+  "keyword_id": "kw_001",
+  "reason": "high_acos_low_conversion"
+}
+```
+
 ## 5. 执行通道决策
 
 ### 5.1 API executor
@@ -194,6 +213,7 @@ type ActionExecutor interface {
 5. campaign_pause
 6. campaign_resume
 7. negative_keyword_add
+8. pause_keyword
 
 ### 5.2 browser fallback executor
 
@@ -202,6 +222,7 @@ type ActionExecutor interface {
 1. campaign_pause
 2. campaign_resume
 3. negative_keyword_add
+4. pause_keyword
 
 条件：
 
@@ -242,6 +263,7 @@ type ActionExecutor interface {
 |campaign_pause|否|0|
 |campaign_resume|否|0|
 |negative_keyword_add|否|0|
+|pause_keyword|否|0|
 
 ## 9. 审计字段要求
 

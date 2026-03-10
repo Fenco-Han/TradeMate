@@ -56,6 +56,7 @@ func NewDefaultRegistry() *Registry {
 		newSimpleExecutor("campaign_pause", []string{"campaign_id"}, "campaign paused"),
 		newSimpleExecutor("campaign_resume", []string{"campaign_id"}, "campaign resumed"),
 		newSimpleExecutor("negative_keyword_add", []string{"campaign_id", "ad_group_id", "keyword_text", "match_type"}, "negative keyword added"),
+		newSimpleExecutor("pause_keyword", []string{"keyword_id"}, "keyword paused"),
 	)
 }
 
