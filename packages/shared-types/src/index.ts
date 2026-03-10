@@ -99,6 +99,20 @@ export interface Task {
   created_at: string;
 }
 
+export interface Notification {
+  id: string;
+  user_id: string;
+  agent_type: string;
+  message_type: string;
+  priority: "low" | "medium" | "high";
+  title: string;
+  body: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface MeResponse {
   user: User;
   roles: RoleAssignment[];

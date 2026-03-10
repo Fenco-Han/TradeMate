@@ -36,6 +36,34 @@ body {
   gap: 10px;
 }
 
+.tabs-card {
+  gap: 12px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tab-btn {
+  padding: 8px 6px;
+  font-size: 12px;
+  border-radius: 10px;
+  background: #d9e2ec;
+  color: #243b53;
+}
+
+.tab-btn.active {
+  background: #186faf;
+  color: #ffffff;
+}
+
+.tab-pane {
+  display: grid;
+  gap: 10px;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -61,6 +89,15 @@ button {
   cursor: pointer;
 }
 
+button.small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+button.secondary {
+  background: #627d98;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -83,11 +120,21 @@ button {
   gap: 10px;
 }
 
+.popup-list li.unread {
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  padding: 10px;
+}
+
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.actions-inline {
+  justify-content: flex-end;
 }
 
 .risk-pill {
