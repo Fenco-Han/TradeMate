@@ -1,0 +1,5 @@
+{
+  "name": "trademate.getRelayStatus",
+  "description": "Return placeholder relay health information for the active browser context."
+}
+

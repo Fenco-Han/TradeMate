@@ -1,0 +1,12 @@
+{
+  "name": "trademate",
+  "version": "0.0.1",
+  "description": "TradeMate OpenClaw extension",
+  "rpc": [
+    "trademate.getRelayStatus"
+  ],
+  "tools": [
+    "relay_health_check"
+  ]
+}
+

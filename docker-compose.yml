@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.4
+    platform: linux/arm64
+    container_name: trademate-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: trademate
+      MYSQL_USER: trademate
+      MYSQL_PASSWORD: trademate
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7.4
+    platform: linux/arm64
+    container_name: trademate-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mysql-data:
+  redis-data:
+

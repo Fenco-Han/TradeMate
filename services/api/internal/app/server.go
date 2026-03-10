@@ -1,0 +1,65 @@
+package app
+
+import (
+	"log"
+	"os"
+
+	"github.com/fenco/trademate/services/api/internal/auth"
+	"github.com/fenco/trademate/services/api/internal/config"
+	httpapi "github.com/fenco/trademate/services/api/internal/http"
+	"github.com/fenco/trademate/services/api/internal/store"
+	"github.com/gin-gonic/gin"
+)
+
+func NewServer(cfg config.Config) *gin.Engine {
+	db, err := store.OpenDB(cfg.MySQLDSN)
+	if err != nil {
+		log.Fatalf("failed to connect mysql: %v", err)
+	}
+
+	wd, _ := os.Getwd()
+	if err := store.ApplyMigrations(db, wd); err != nil {
+		log.Fatalf("failed to apply migrations: %v", err)
+	}
+	if err := store.SeedDemoData(db); err != nil {
+		log.Fatalf("failed to seed demo data: %v", err)
+	}
+
+	repo := store.NewRepository(db)
+	tokenService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiresHour)
+	hub := httpapi.NewWebSocketHub()
+	handlers := httpapi.NewHandlers(repo, tokenService, hub)
+
+	router := gin.Default()
+	router.Use(httpapi.AuthMiddlewareProxy(tokenService))
+
+	router.GET("/health", handlers.Health)
+
+	api := router.Group("/api/v1")
+	{
+		api.POST("/auth/login", handlers.Login)
+		api.GET("/me", handlers.Me)
+
+		api.GET("/agent-goals/current", handlers.GetGoal)
+		api.PATCH("/agent-goals/current", handlers.UpsertGoal)
+
+		api.GET("/agents/ad/suggestions", handlers.ListSuggestions)
+		api.GET("/agents/ad/suggestions/:suggestion_id", handlers.GetSuggestionDetail)
+		api.POST("/agents/ad/suggestions/:suggestion_id/approve", handlers.ApproveSuggestion)
+		api.POST("/agents/ad/suggestions/:suggestion_id/reject", handlers.RejectSuggestion)
+		api.POST("/agents/ad/suggestions/batch-approve", handlers.BatchApproveSuggestions)
+
+		api.GET("/tasks", handlers.ListTasks)
+		api.GET("/tasks/:task_id", handlers.GetTask)
+		api.POST("/tasks/:task_id/cancel", handlers.CancelTask)
+		api.POST("/tasks/:task_id/retry", handlers.RetryTask)
+
+		api.GET("/notifications", handlers.ListNotifications)
+		api.POST("/notifications/:notification_id/read", handlers.MarkNotificationRead)
+
+		api.GET("/audit-logs", handlers.ListAuditLogs)
+		api.GET("/ws", handlers.WebSocket)
+	}
+
+	return router
+}
