@@ -57,6 +57,7 @@ func NewServer(cfg config.Config) *gin.Engine {
 		api.GET("/agents/ad/suggestions", handlers.ListSuggestions)
 		api.GET("/agents/ad/data-preview", handlers.GetAdsDataPreview)
 		api.GET("/agents/ad/suggestions/:suggestion_id", handlers.GetSuggestionDetail)
+		api.GET("/agents/ad/reviews/:task_id", handlers.GetTaskReview)
 		api.POST("/agents/ad/suggestions/:suggestion_id/approve", handlers.ApproveSuggestion)
 		api.POST("/agents/ad/suggestions/:suggestion_id/reject", handlers.RejectSuggestion)
 		api.POST("/agents/ad/suggestions/batch-approve", handlers.BatchApproveSuggestions)

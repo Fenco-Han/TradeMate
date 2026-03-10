@@ -404,12 +404,52 @@ func (h *Handlers) GetTask(c *gin.Context) {
 		return
 	}
 
+	reviewStatus := "pending"
+	snapshot, err := h.repo.GetReviewSnapshot(storeID, taskID)
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			respondError(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		reviewStatus = snapshot.Status
+	}
+
 	respond(c, http.StatusOK, models.TaskDetailResponse{
 		Task:         task,
 		TaskEvents:   events,
 		AuditLogs:    auditLogs,
-		ReviewStatus: "pending",
+		ReviewStatus: reviewStatus,
 	})
+}
+
+func (h *Handlers) GetTaskReview(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	taskID := c.Param("task_id")
+
+	task, err := h.repo.GetTask(storeID, taskID)
+	if err != nil {
+		h.handleStoreError(c, err)
+		return
+	}
+
+	snapshot, err := h.repo.GetReviewSnapshot(storeID, taskID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			respond(c, http.StatusOK, models.ReviewSnapshot{
+				AgentType:     task.AgentType,
+				TaskID:        taskID,
+				StoreID:       storeID,
+				Status:        "pending",
+				BeforeMetrics: map[string]any{},
+			})
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respond(c, http.StatusOK, snapshot)
 }
 
 func (h *Handlers) CancelTask(c *gin.Context) {

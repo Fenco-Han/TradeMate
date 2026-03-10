@@ -212,6 +212,7 @@ func RollbackMigrations(db *sql.DB) error {
 	statements := []string{
 		"DROP TABLE IF EXISTS audit_log",
 		"DROP TABLE IF EXISTS notification",
+		"DROP TABLE IF EXISTS review_snapshot",
 		"DROP TABLE IF EXISTS task_event",
 		"DROP TABLE IF EXISTS task",
 		"DROP TABLE IF EXISTS approval",

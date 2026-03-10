@@ -747,6 +747,63 @@ LIMIT 1`, taskID, storeID)
 	return task, nil
 }
 
+func (r *Repository) GetReviewSnapshot(storeID, taskID string) (models.ReviewSnapshot, error) {
+	row := r.db.QueryRow(`
+SELECT id, agent_type, task_id, store_id, status, before_metrics_json, after_metrics_json, summary, generated_at
+FROM review_snapshot
+WHERE task_id = ? AND store_id = ?
+ORDER BY generated_at DESC
+LIMIT 1`, taskID, storeID)
+
+	snapshot, err := scanReviewSnapshot(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.ReviewSnapshot{}, ErrNotFound
+		}
+		return models.ReviewSnapshot{}, err
+	}
+
+	return snapshot, nil
+}
+
+func (r *Repository) UpsertReviewSnapshot(storeID, taskID, status string, beforeMetrics, afterMetrics map[string]any, summary string) (models.ReviewSnapshot, error) {
+	if beforeMetrics == nil {
+		beforeMetrics = map[string]any{}
+	}
+
+	beforeRaw, err := json.Marshal(beforeMetrics)
+	if err != nil {
+		return models.ReviewSnapshot{}, err
+	}
+
+	var afterRaw any
+	if len(afterMetrics) > 0 {
+		encoded, marshalErr := json.Marshal(afterMetrics)
+		if marshalErr != nil {
+			return models.ReviewSnapshot{}, marshalErr
+		}
+		afterRaw = encoded
+	}
+
+	_, err = r.db.Exec(`
+INSERT INTO review_snapshot (
+  id, agent_type, task_id, store_id, status, before_metrics_json, after_metrics_json, summary, generated_at
+)
+VALUES (?, 'ad_agent', ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())
+ON DUPLICATE KEY UPDATE
+  status = VALUES(status),
+  before_metrics_json = VALUES(before_metrics_json),
+  after_metrics_json = VALUES(after_metrics_json),
+  summary = VALUES(summary),
+  generated_at = UTC_TIMESTAMP()`,
+		newID("rvw"), taskID, storeID, status, beforeRaw, afterRaw, nullString(summary))
+	if err != nil {
+		return models.ReviewSnapshot{}, err
+	}
+
+	return r.GetReviewSnapshot(storeID, taskID)
+}
+
 func (r *Repository) ListQueuedTasks(limit int, storeID string) ([]QueuedTask, error) {
 	if limit <= 0 {
 		limit = 20
@@ -1384,6 +1441,31 @@ func decodeJSONMap(raw []byte) map[string]any {
 		return map[string]any{}
 	}
 	return out
+}
+
+func scanReviewSnapshot(scanner interface {
+	Scan(dest ...any) error
+}) (models.ReviewSnapshot, error) {
+	var item models.ReviewSnapshot
+	var beforeRaw []byte
+	var afterRaw []byte
+	var summary sql.NullString
+	var generatedAt time.Time
+
+	if err := scanner.Scan(&item.ID, &item.AgentType, &item.TaskID, &item.StoreID, &item.Status, &beforeRaw, &afterRaw, &summary, &generatedAt); err != nil {
+		return models.ReviewSnapshot{}, err
+	}
+
+	item.BeforeMetrics = decodeJSONMap(beforeRaw)
+	if len(afterRaw) > 0 && string(afterRaw) != "null" {
+		item.AfterMetrics = decodeJSONMap(afterRaw)
+	}
+	if summary.Valid {
+		item.Summary = &summary.String
+	}
+	item.GeneratedAt = toRFC3339(generatedAt)
+
+	return item, nil
 }
 
 func nullString(value string) any {

@@ -125,6 +125,18 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface ReviewSnapshot {
+  id?: string;
+  agent_type: string;
+  task_id: string;
+  store_id: string;
+  status: "pending" | "partial" | "ready";
+  before_metrics: Record<string, unknown>;
+  after_metrics?: Record<string, unknown>;
+  summary?: string | null;
+  generated_at?: string;
+}
+
 export interface MeResponse {
   user: User;
   roles: RoleAssignment[];

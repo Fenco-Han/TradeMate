@@ -11,6 +11,7 @@ import (
 type fakeRepo struct {
 	queued          []store.QueuedTask
 	notifications   int
+	reviewSnapshots int
 	listQueuedErr   error
 	updateStatusErr map[string]error
 }
@@ -56,6 +57,11 @@ func (f *fakeRepo) CreateNotificationForStore(_ string, _, _, _, _ string, _, _ 
 	return nil
 }
 
+func (f *fakeRepo) UpsertReviewSnapshot(_, _, _ string, _, _ map[string]any, _ string) (models.ReviewSnapshot, error) {
+	f.reviewSnapshots++
+	return models.ReviewSnapshot{}, nil
+}
+
 func TestRunOnceSuccess(t *testing.T) {
 	repo := &fakeRepo{
 		queued: []store.QueuedTask{{
@@ -85,6 +91,9 @@ func TestRunOnceSuccess(t *testing.T) {
 	}
 	if repo.notifications != 1 {
 		t.Fatalf("expected 1 notification, got %d", repo.notifications)
+	}
+	if repo.reviewSnapshots != 1 {
+		t.Fatalf("expected 1 review snapshot, got %d", repo.reviewSnapshots)
 	}
 }
 
@@ -117,5 +126,8 @@ func TestRunOnceFailedForInvalidPayload(t *testing.T) {
 	}
 	if repo.notifications != 1 {
 		t.Fatalf("expected 1 notification, got %d", repo.notifications)
+	}
+	if repo.reviewSnapshots != 1 {
+		t.Fatalf("expected 1 review snapshot, got %d", repo.reviewSnapshots)
 	}
 }

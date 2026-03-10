@@ -19,6 +19,7 @@ type Repository interface {
 	ListQueuedTasks(limit int, storeID string) ([]store.QueuedTask, error)
 	UpdateTaskStatus(storeID, actorID, taskID, nextStatus, reason string) (models.Task, error)
 	CreateNotificationForStore(storeID, messageType, priority, title, body string, targetType, targetID *string) error
+	UpsertReviewSnapshot(storeID, taskID, status string, beforeMetrics, afterMetrics map[string]any, summary string) (models.ReviewSnapshot, error)
 }
 
 type RunOnceInput struct {
@@ -112,6 +113,8 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 				continue
 			}
 
+			beforeMetrics, _ := extractMetricsFromTaskPayload(failedTask)
+			_, _ = s.repo.UpsertReviewSnapshot(item.StoreID, failedTask.ID, "partial", beforeMetrics, nil, truncateMessage(execErr.Error()))
 			_ = notifyTaskStatus(s.repo, item.StoreID, failedTask.ID, failedTask.TaskType, failedTask.Status, truncateMessage(execErr.Error()))
 			result.Failed++
 			result.Results = append(result.Results, TaskRunResult{
@@ -137,6 +140,8 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 			continue
 		}
 
+		beforeMetrics, afterMetrics := extractMetricsFromTaskPayload(succeededTask)
+		_, _ = s.repo.UpsertReviewSnapshot(item.StoreID, succeededTask.ID, "ready", beforeMetrics, afterMetrics, execResult.Summary)
 		_ = notifyTaskStatus(s.repo, item.StoreID, succeededTask.ID, succeededTask.TaskType, succeededTask.Status, execResult.Summary)
 		result.Succeeded++
 		result.Results = append(result.Results, TaskRunResult{
@@ -215,4 +220,50 @@ func truncateMessage(message string) string {
 		return trimmed
 	}
 	return trimmed[:240]
+}
+
+func extractMetricsFromTaskPayload(task models.Task) (map[string]any, map[string]any) {
+	beforeMetrics := map[string]any{
+		"task_type":   task.TaskType,
+		"target_type": task.TargetType,
+		"target_id":   task.TargetID,
+	}
+	afterMetrics := map[string]any{
+		"task_type":   task.TaskType,
+		"target_type": task.TargetType,
+		"target_id":   task.TargetID,
+	}
+
+	payload := map[string]any{}
+	if strings.TrimSpace(task.PayloadJSON) == "" {
+		return beforeMetrics, map[string]any{}
+	}
+	if err := json.Unmarshal([]byte(task.PayloadJSON), &payload); err != nil {
+		return beforeMetrics, map[string]any{}
+	}
+
+	if nestedBefore, ok := payload["before"].(map[string]any); ok {
+		for key, value := range nestedBefore {
+			beforeMetrics[key] = value
+		}
+	}
+	if nestedAfter, ok := payload["after"].(map[string]any); ok {
+		for key, value := range nestedAfter {
+			afterMetrics[key] = value
+		}
+	}
+
+	for key, value := range payload {
+		switch {
+		case strings.HasPrefix(key, "before_"):
+			beforeMetrics[strings.TrimPrefix(key, "before_")] = value
+		case strings.HasPrefix(key, "after_"):
+			afterMetrics[strings.TrimPrefix(key, "after_")] = value
+		}
+	}
+
+	if len(afterMetrics) == 3 {
+		return beforeMetrics, map[string]any{}
+	}
+	return beforeMetrics, afterMetrics
 }

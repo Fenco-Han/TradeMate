@@ -129,6 +129,18 @@ type AuditLog struct {
 	CreatedAt    string  `json:"created_at"`
 }
 
+type ReviewSnapshot struct {
+	ID            string         `json:"id"`
+	AgentType     string         `json:"agent_type"`
+	TaskID        string         `json:"task_id"`
+	StoreID       string         `json:"store_id"`
+	Status        string         `json:"status"`
+	BeforeMetrics map[string]any `json:"before_metrics"`
+	AfterMetrics  map[string]any `json:"after_metrics,omitempty"`
+	Summary       *string        `json:"summary,omitempty"`
+	GeneratedAt   string         `json:"generated_at"`
+}
+
 type MeResponse struct {
 	User          User             `json:"user"`
 	Roles         []RoleAssignment `json:"roles"`

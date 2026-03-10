@@ -51,9 +51,10 @@ The repository currently focuses on a DB-backed platform baseline:
 8. Task Worker closes the loop from `queued -> running -> succeeded/failed`
 9. Manual task run trigger endpoint: `POST /api/v1/tasks/run-once`
 10. Notification list/read and WebSocket push (`/api/v1/ws`)
-11. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
-12. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
-13. Extension popup supports suggestions/tasks/notifications workflows and configurable options
+11. Task review snapshot generation and review query endpoint (`/api/v1/agents/ad/reviews/:task_id`)
+12. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
+13. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
+14. Extension popup supports suggestions/tasks/notifications workflows and configurable options
 
 ## API conventions
 

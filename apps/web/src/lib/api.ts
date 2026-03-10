@@ -5,6 +5,7 @@ import type {
   LoginResponse,
   MeResponse,
   Notification,
+  ReviewSnapshot,
   Suggestion,
   Task,
   RiskLevel
@@ -196,6 +197,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ limit: input?.limit ?? 20 })
     });
+  },
+  getTaskReview(taskID: string) {
+    return request<ReviewSnapshot>(`/agents/ad/reviews/${taskID}`);
   },
   listNotifications(input?: { limit?: number }) {
     const query = buildQuery({

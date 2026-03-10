@@ -480,6 +480,12 @@
 3. summary
 4. status
 
+状态说明：
+
+1. `pending`：任务未完成或复盘尚未生成
+2. `partial`：任务失败，仅有执行前快照
+3. `ready`：任务完成，执行前后快照齐全
+
 ### 5.15 获取通知列表
 
 `GET /api/v1/notifications`
