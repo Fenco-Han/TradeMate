@@ -430,6 +430,7 @@
 2. task_events
 3. audit_logs
 4. review_status
+5. execution（channel / execution_id / status / fallback_used / fallback_requested）
 
 ### 5.12 取消任务
 
@@ -467,7 +468,7 @@
 2. succeeded
 3. failed
 4. skipped
-5. results（task_id / status / message）
+5. results（task_id / status / message / channel / execution_mode / attempt_count）
 
 ### 5.14 获取复盘
 
