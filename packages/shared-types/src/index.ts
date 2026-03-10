@@ -9,6 +9,16 @@ export type SuggestionStatus =
   | "expired"
   | "executed";
 
+export type TaskStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
 export interface User {
   id: string;
   email?: string | null;
@@ -66,6 +76,26 @@ export interface Suggestion {
   action_payload_json: Record<string, unknown>;
   status: SuggestionStatus;
   expires_at?: string | null;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  agent_type: string;
+  suggestion_id: string;
+  approval_id?: string | null;
+  task_type: string;
+  target_type: string;
+  target_id: string;
+  risk_level: RiskLevel;
+  payload_json: string;
+  status: TaskStatus;
+  retry_count: number;
+  failure_reason?: string | null;
+  created_by: string;
+  approved_by?: string | null;
+  executed_at?: string | null;
+  finished_at?: string | null;
   created_at: string;
 }
 

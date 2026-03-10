@@ -42,6 +42,7 @@ The repository currently focuses on a DB-backed platform baseline:
 5. Approve/reject suggestions and generate tasks
 6. List/cancel/retry tasks with status transition checks
 7. Notification list/read and WebSocket push (`/api/v1/ws`)
+8. Web pages for dashboard, approvals, tasks center, and goals
 
 ## API conventions
 

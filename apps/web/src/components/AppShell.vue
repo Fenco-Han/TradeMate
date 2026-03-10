@@ -3,6 +3,8 @@
     <aside class="sidebar">
       <div class="brand">TradeMate</div>
       <router-link to="/dashboard">Dashboard</router-link>
+      <router-link to="/approvals">Approvals</router-link>
+      <router-link to="/tasks">Tasks</router-link>
       <router-link to="/goals">Goals</router-link>
     </aside>
     <main class="content">
@@ -23,4 +25,3 @@ defineProps<{
   storeName?: string;
 }>();
 </script>
-

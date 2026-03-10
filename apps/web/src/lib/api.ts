@@ -3,7 +3,9 @@ import type {
   ApiResponse,
   LoginResponse,
   MeResponse,
-  Suggestion
+  Suggestion,
+  Task,
+  RiskLevel
 } from "@trademate/shared-types";
 
 const API_BASE = "http://localhost:8080/api/v1";
@@ -14,8 +16,32 @@ export interface SuggestionsPayload {
   unread_high_risk_count: number;
 }
 
+export interface TasksPayload {
+  list: Task[];
+  total: number;
+}
+
+export interface ApproveSuggestionResult {
+  approval_id: string;
+  task_id: string;
+  task_status: string;
+}
+
 function getToken() {
   return localStorage.getItem("trademate.token") ?? "";
+}
+
+function buildQuery(params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === "") {
+      continue;
+    }
+    query.set(key, String(value));
+  }
+
+  const queryString = query.toString();
+  return queryString ? `?${queryString}` : "";
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -64,7 +90,77 @@ export const api = {
       body: JSON.stringify(input)
     });
   },
-  listSuggestions() {
-    return request<SuggestionsPayload>("/agents/ad/suggestions");
+  listSuggestions(input?: {
+    status?: string;
+    risk_level?: RiskLevel;
+    page?: number;
+    page_size?: number;
+  }) {
+    const query = buildQuery({
+      status: input?.status,
+      risk_level: input?.risk_level,
+      page: input?.page,
+      page_size: input?.page_size
+    });
+    return request<SuggestionsPayload>(`/agents/ad/suggestions${query}`);
+  },
+  approveSuggestion(suggestionID: string, input?: { note?: string; execute_immediately?: boolean }) {
+    return request<ApproveSuggestionResult>(`/agents/ad/suggestions/${suggestionID}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        note: input?.note ?? "approved from web",
+        execute_immediately: input?.execute_immediately ?? true
+      })
+    });
+  },
+  rejectSuggestion(suggestionID: string, input?: { note?: string }) {
+    return request<{ suggestion_id: string; status: string }>(
+      `/agents/ad/suggestions/${suggestionID}/reject`,
+      {
+        method: "POST",
+        body: JSON.stringify({ note: input?.note ?? "rejected from web" })
+      }
+    );
+  },
+  batchApproveSuggestions(input: {
+    suggestion_ids: string[];
+    note?: string;
+    execute_immediately?: boolean;
+  }) {
+    return request<{ results: ApproveSuggestionResult[]; total: number }>(
+      "/agents/ad/suggestions/batch-approve",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          suggestion_ids: input.suggestion_ids,
+          note: input.note ?? "batch approved from web",
+          execute_immediately: input.execute_immediately ?? true
+        })
+      }
+    );
+  },
+  listTasks(input?: {
+    status?: string;
+    risk_level?: RiskLevel;
+    page?: number;
+    page_size?: number;
+  }) {
+    const query = buildQuery({
+      status: input?.status,
+      risk_level: input?.risk_level,
+      page: input?.page,
+      page_size: input?.page_size
+    });
+    return request<TasksPayload>(`/tasks${query}`);
+  },
+  cancelTask(taskID: string) {
+    return request<Task>(`/tasks/${taskID}/cancel`, {
+      method: "POST"
+    });
+  },
+  retryTask(taskID: string) {
+    return request<Task>(`/tasks/${taskID}/retry`, {
+      method: "POST"
+    });
   }
 };
