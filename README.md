@@ -29,6 +29,7 @@ docs/
 3. Install packages with `pnpm install`
 4. Run migration with `pnpm migrate:up` (or `make migrate-up`)
 5. Start all services with `make dev`
+6. Enable browser fallback in API/worker with `OPENCLOW_FALLBACK_ENABLED=true` (optional)
 
 Useful commands:
 
@@ -55,6 +56,7 @@ The repository currently focuses on a DB-backed platform baseline:
 12. Ads data preview endpoint with API client + mock fallback (`/api/v1/agents/ad/data-preview`)
 13. Web pages for dashboard, approvals, tasks center, review center, notifications, audit logs, and goals
 14. Extension popup supports suggestions/tasks/reviews/notifications workflows and configurable options
+15. Worker supports controlled OpenClaw browser fallback dispatch for selected task types
 
 ## API conventions
 

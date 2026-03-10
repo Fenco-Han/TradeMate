@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fenco/trademate/services/api/internal/config"
+	"github.com/fenco/trademate/services/api/internal/openclaw"
 	"github.com/fenco/trademate/services/api/internal/store"
 	"github.com/fenco/trademate/services/api/internal/worker"
 )
@@ -34,7 +35,8 @@ func main() {
 	}
 
 	repo := store.NewRepository(db)
-	svc := worker.NewService(repo, nil)
+	fallbackClient := openclaw.NewClient(cfg)
+	svc := worker.NewService(repo, nil, fallbackClient)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

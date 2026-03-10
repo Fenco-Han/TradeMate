@@ -3,11 +3,13 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/fenco/trademate/services/api/internal/executor"
 	"github.com/fenco/trademate/services/api/internal/models"
+	"github.com/fenco/trademate/services/api/internal/openclaw"
 	"github.com/fenco/trademate/services/api/internal/store"
 )
 
@@ -46,15 +48,20 @@ type RunOnceResult struct {
 }
 
 type Service struct {
-	repo     Repository
-	registry *executor.Registry
+	repo           Repository
+	registry       *executor.Registry
+	fallbackRunner openclaw.Runner
 }
 
-func NewService(repo Repository, registry *executor.Registry) *Service {
+func NewService(repo Repository, registry *executor.Registry, fallbackRunner openclaw.Runner) *Service {
 	if registry == nil {
 		registry = executor.NewDefaultRegistry()
 	}
-	return &Service{repo: repo, registry: registry}
+	return &Service{
+		repo:           repo,
+		registry:       registry,
+		fallbackRunner: fallbackRunner,
+	}
 }
 
 func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResult, error) {
@@ -161,7 +168,7 @@ func (s *Service) RunOnce(ctx context.Context, input RunOnceInput) (RunOnceResul
 	return result, nil
 }
 
-func (s *Service) executeTask(_ context.Context, storeID string, task models.Task) (executor.ExecutionResult, error) {
+func (s *Service) executeTask(ctx context.Context, storeID string, task models.Task) (executor.ExecutionResult, error) {
 	execHandler, exists := s.registry.Get(task.TaskType)
 	if !exists {
 		return executor.ExecutionResult{}, fmt.Errorf("unsupported task_type: %s", task.TaskType)
@@ -181,6 +188,10 @@ func (s *Service) executeTask(_ context.Context, storeID string, task models.Tas
 		TargetID:   task.TargetID,
 	}
 
+	if shouldUseFallback(payload) {
+		return s.executeViaFallback(ctx, storeID, task, payload)
+	}
+
 	if err := execHandler.Validate(execCtx, payload); err != nil {
 		return executor.ExecutionResult{}, fmt.Errorf("validate %s failed: %w", task.TaskType, err)
 	}
@@ -195,6 +206,40 @@ func (s *Service) executeTask(_ context.Context, storeID string, task models.Tas
 	}
 
 	return execResult, nil
+}
+
+func (s *Service) executeViaFallback(ctx context.Context, storeID string, task models.Task, payload map[string]any) (executor.ExecutionResult, error) {
+	if task.ApprovedBy == nil || strings.TrimSpace(*task.ApprovedBy) == "" {
+		return executor.ExecutionResult{}, errors.New("fallback requires approved_by")
+	}
+	actionName, ok := taskTypeToFallbackAction(task.TaskType)
+	if !ok {
+		return executor.ExecutionResult{}, fmt.Errorf("task_type %s does not support browser fallback", task.TaskType)
+	}
+	if s.fallbackRunner == nil {
+		return executor.ExecutionResult{}, openclaw.ErrFallbackDisabled
+	}
+
+	result, err := s.fallbackRunner.RunBrowserAction(ctx, openclaw.BrowserActionRequest{
+		StoreID:    storeID,
+		TaskID:     task.ID,
+		ActionName: actionName,
+		Payload:    payload,
+	})
+	if err != nil {
+		_ = s.repo.CreateAuditLog(storeID, "system_worker", "task_fallback_failed", "task", task.ID, "failed", fmt.Sprintf(`{"action_name":"%s","error":"%s"}`, actionName, sanitizeJSON(err.Error())))
+		return executor.ExecutionResult{}, err
+	}
+
+	_ = s.repo.CreateAuditLog(storeID, "system_worker", "task_fallback_executed", "task", task.ID, "success", fmt.Sprintf(`{"action_name":"%s","channel":"%s"}`, actionName, result.Channel))
+	return executor.ExecutionResult{
+		ExecutionID: result.ExecutionID,
+		Channel:     result.Channel,
+		Status:      result.Status,
+		RawResult:   result.RawResult,
+		Summary:     result.Summary,
+		FinishedAt:  result.FinishedAt,
+	}, nil
 }
 
 func notifyTaskStatus(repo Repository, storeID, taskID, taskType, status, detail string) error {
@@ -225,6 +270,30 @@ func truncateMessage(message string) string {
 		return trimmed
 	}
 	return trimmed[:240]
+}
+
+func shouldUseFallback(payload map[string]any) bool {
+	value, exists := payload["force_fallback"]
+	if !exists {
+		return false
+	}
+	fallback, ok := value.(bool)
+	return ok && fallback
+}
+
+func taskTypeToFallbackAction(taskType string) (string, bool) {
+	switch taskType {
+	case "campaign_pause":
+		return "pause_campaign", true
+	case "campaign_resume":
+		return "resume_campaign", true
+	case "negative_keyword_add":
+		return "add_negative_keyword", true
+	case "pause_keyword":
+		return "pause_keyword", true
+	default:
+		return "", false
+	}
 }
 
 func extractMetricsFromTaskPayload(task models.Task) (map[string]any, map[string]any) {
@@ -271,4 +340,9 @@ func extractMetricsFromTaskPayload(task models.Task) (map[string]any, map[string
 		return beforeMetrics, map[string]any{}
 	}
 	return beforeMetrics, afterMetrics
+}
+
+func sanitizeJSON(value string) string {
+	replacer := strings.NewReplacer(`\\`, `\\\\`, `"`, `\\"`, "\n", " ", "\r", " ", "\t", " ")
+	return replacer.Replace(value)
 }

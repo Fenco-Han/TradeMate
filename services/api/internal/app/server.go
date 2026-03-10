@@ -9,6 +9,7 @@ import (
 	"github.com/fenco/trademate/services/api/internal/config"
 	"github.com/fenco/trademate/services/api/internal/executor"
 	httpapi "github.com/fenco/trademate/services/api/internal/http"
+	"github.com/fenco/trademate/services/api/internal/openclaw"
 	"github.com/fenco/trademate/services/api/internal/store"
 	"github.com/fenco/trademate/services/api/internal/worker"
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,8 @@ func NewServer(cfg config.Config) *gin.Engine {
 	tokenService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiresHour)
 	adsClient := ads.NewClient(cfg)
 	executorRegistry := executor.NewDefaultRegistry()
-	workerService := worker.NewService(repo, executorRegistry)
+	fallbackClient := openclaw.NewClient(cfg)
+	workerService := worker.NewService(repo, executorRegistry, fallbackClient)
 	hub := httpapi.NewWebSocketHub()
 	handlers := httpapi.NewHandlers(repo, tokenService, hub, adsClient, workerService)
 

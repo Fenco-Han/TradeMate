@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/fenco/trademate/services/api/internal/models"
+	"github.com/fenco/trademate/services/api/internal/openclaw"
 	"github.com/fenco/trademate/services/api/internal/store"
 )
 
@@ -15,6 +17,12 @@ type fakeRepo struct {
 	auditLogs       int
 	listQueuedErr   error
 	updateStatusErr map[string]error
+}
+
+type fakeFallbackRunner struct {
+	result openclaw.BrowserActionResult
+	err    error
+	calls  int
 }
 
 func (f *fakeRepo) ListQueuedTasks(limit int, storeID string) ([]store.QueuedTask, error) {
@@ -68,6 +76,14 @@ func (f *fakeRepo) CreateAuditLog(_, _, _, _, _, _, _ string) error {
 	return nil
 }
 
+func (f *fakeFallbackRunner) RunBrowserAction(_ context.Context, _ openclaw.BrowserActionRequest) (openclaw.BrowserActionResult, error) {
+	f.calls++
+	if f.err != nil {
+		return openclaw.BrowserActionResult{}, f.err
+	}
+	return f.result, nil
+}
+
 func TestRunOnceSuccess(t *testing.T) {
 	repo := &fakeRepo{
 		queued: []store.QueuedTask{{
@@ -83,7 +99,7 @@ func TestRunOnceSuccess(t *testing.T) {
 		}},
 	}
 
-	svc := NewService(repo, nil)
+	svc := NewService(repo, nil, nil)
 	result, err := svc.RunOnce(t.Context(), RunOnceInput{Limit: 10})
 	if err != nil {
 		t.Fatalf("run once error: %v", err)
@@ -121,7 +137,7 @@ func TestRunOnceFailedForInvalidPayload(t *testing.T) {
 		}},
 	}
 
-	svc := NewService(repo, nil)
+	svc := NewService(repo, nil, nil)
 	result, err := svc.RunOnce(t.Context(), RunOnceInput{Limit: 10})
 	if err != nil {
 		t.Fatalf("run once error: %v", err)
@@ -141,5 +157,51 @@ func TestRunOnceFailedForInvalidPayload(t *testing.T) {
 	}
 	if repo.auditLogs != 1 {
 		t.Fatalf("expected 1 audit log, got %d", repo.auditLogs)
+	}
+}
+
+func TestRunOnceFallbackExecution(t *testing.T) {
+	approvedBy := "u_approver"
+	repo := &fakeRepo{
+		queued: []store.QueuedTask{{
+			StoreID: "store_1",
+			Task: models.Task{
+				ID:         "task_fb_1",
+				TaskType:   "campaign_pause",
+				TargetType: "campaign",
+				TargetID:   "cmp_1",
+				PayloadJSON: `{
+				  "campaign_id":"cmp_1",
+				  "force_fallback":true,
+				  "relay_attached":true
+				}`,
+				Status:     "queued",
+				ApprovedBy: &approvedBy,
+			},
+		}},
+	}
+	fallback := &fakeFallbackRunner{
+		result: openclaw.BrowserActionResult{
+			ExecutionID: "oc_1",
+			Channel:     "browser_fallback",
+			Status:      "success",
+			Summary:     "fallback ok",
+		},
+	}
+
+	svc := NewService(repo, nil, fallback)
+	result, err := svc.RunOnce(t.Context(), RunOnceInput{Limit: 10})
+	if err != nil {
+		t.Fatalf("run once error: %v", err)
+	}
+
+	if result.Succeeded != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if fallback.calls != 1 {
+		t.Fatalf("expected fallback runner called once, got %d", fallback.calls)
+	}
+	if repo.auditLogs < 2 {
+		t.Fatalf("expected at least 2 audit logs, got %d", repo.auditLogs)
 	}
 }
