@@ -43,12 +43,13 @@ The repository currently focuses on a DB-backed platform baseline:
 1. Login with seed account and JWT session
 2. View current user and store context from MySQL
 3. Create and update ad goals (persisted)
-4. Fetch suggestion list and detail
-5. Approve/reject suggestions and generate tasks
-6. List/cancel/retry tasks with status transition checks
-7. Notification list/read and WebSocket push (`/api/v1/ws`)
-8. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
-9. Extension popup supports suggestions/tasks/notifications workflows and configurable options
+4. Goal CRUD and store list APIs are available for management scenarios
+5. Fetch suggestion list and detail
+6. Approve/reject suggestions and generate tasks
+7. List/cancel/retry tasks with status transition checks
+8. Notification list/read and WebSocket push (`/api/v1/ws`)
+9. Web pages for dashboard, approvals, tasks center, notifications, audit logs, and goals
+10. Extension popup supports suggestions/tasks/notifications workflows and configurable options
 
 ## API conventions
 

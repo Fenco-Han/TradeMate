@@ -39,9 +39,14 @@ func NewServer(cfg config.Config) *gin.Engine {
 	{
 		api.POST("/auth/login", handlers.Login)
 		api.GET("/me", handlers.Me)
+		api.GET("/stores", handlers.ListStores)
 
 		api.GET("/agent-goals/current", handlers.GetGoal)
 		api.PATCH("/agent-goals/current", handlers.UpsertGoal)
+		api.GET("/agent-goals", handlers.ListGoals)
+		api.POST("/agent-goals", handlers.CreateGoal)
+		api.PATCH("/agent-goals/:goal_id", handlers.UpdateGoal)
+		api.DELETE("/agent-goals/:goal_id", handlers.DeleteGoal)
 
 		api.GET("/agents/ad/suggestions", handlers.ListSuggestions)
 		api.GET("/agents/ad/suggestions/:suggestion_id", handlers.GetSuggestionDetail)

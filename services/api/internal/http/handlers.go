@@ -85,6 +85,21 @@ func (h *Handlers) Me(c *gin.Context) {
 	respond(c, http.StatusOK, data)
 }
 
+func (h *Handlers) ListStores(c *gin.Context) {
+	userID := contextValue(c, ctxUserIDKey)
+
+	stores, err := h.repo.ListStoresByUser(userID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respond(c, http.StatusOK, gin.H{
+		"list":  stores,
+		"total": len(stores),
+	})
+}
+
 func (h *Handlers) GetGoal(c *gin.Context) {
 	storeID := contextValue(c, ctxActiveStoreKey)
 
@@ -101,6 +116,84 @@ func (h *Handlers) GetGoal(c *gin.Context) {
 	respond(c, http.StatusOK, goal)
 }
 
+func (h *Handlers) ListGoals(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+
+	goals, err := h.repo.ListGoals(storeID)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respond(c, http.StatusOK, gin.H{
+		"list":  goals,
+		"total": len(goals),
+	})
+}
+
+func (h *Handlers) CreateGoal(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	userID := contextValue(c, ctxUserIDKey)
+
+	var input models.UpdateGoalRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PAYLOAD", "invalid payload")
+		return
+	}
+	if err := validateGoalInput(input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
+		return
+	}
+
+	goal, err := h.repo.CreateGoal(storeID, userID, input)
+	if err != nil {
+		h.handleStoreError(c, err)
+		return
+	}
+
+	respond(c, http.StatusCreated, goal)
+}
+
+func (h *Handlers) UpdateGoal(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	userID := contextValue(c, ctxUserIDKey)
+	goalID := c.Param("goal_id")
+
+	var input models.UpdateGoalRequest
+	if err := c.ShouldBindJSON(&input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PAYLOAD", "invalid payload")
+		return
+	}
+	if err := validateGoalInput(input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
+		return
+	}
+
+	goal, err := h.repo.UpdateGoalByID(storeID, userID, goalID, input)
+	if err != nil {
+		h.handleStoreError(c, err)
+		return
+	}
+
+	respond(c, http.StatusOK, goal)
+}
+
+func (h *Handlers) DeleteGoal(c *gin.Context) {
+	storeID := contextValue(c, ctxActiveStoreKey)
+	userID := contextValue(c, ctxUserIDKey)
+	goalID := c.Param("goal_id")
+
+	if err := h.repo.DeleteGoalByID(storeID, userID, goalID); err != nil {
+		h.handleStoreError(c, err)
+		return
+	}
+
+	respond(c, http.StatusOK, gin.H{
+		"goal_id": goalID,
+		"status":  "paused",
+	})
+}
+
 func (h *Handlers) UpsertGoal(c *gin.Context) {
 	storeID := contextValue(c, ctxActiveStoreKey)
 	userID := contextValue(c, ctxUserIDKey)
@@ -111,8 +204,8 @@ func (h *Handlers) UpsertGoal(c *gin.Context) {
 		return
 	}
 
-	if strings.TrimSpace(input.GoalName) == "" || strings.TrimSpace(input.RiskProfile) == "" {
-		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", "goal_name and risk_profile are required")
+	if err := validateGoalInput(input); err != nil {
+		respondErrorCode(c, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
 		return
 	}
 
@@ -432,6 +525,13 @@ func (h *Handlers) publishNotificationEvent(storeID string) {
 
 func publishTaskEvent(h *Handlers, storeID, taskID, status string) {
 	h.publishTaskStatusChanged(storeID, taskID, status)
+}
+
+func validateGoalInput(input models.UpdateGoalRequest) error {
+	if strings.TrimSpace(input.GoalName) == "" || strings.TrimSpace(input.RiskProfile) == "" {
+		return errors.New("goal_name and risk_profile are required")
+	}
+	return nil
 }
 
 func parseIntOrDefault(value string, fallback int) int {

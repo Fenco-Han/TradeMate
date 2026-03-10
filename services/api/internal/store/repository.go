@@ -153,6 +153,30 @@ LIMIT 1`, storeID)
 	}, nil
 }
 
+func (r *Repository) ListStoresByUser(userID string) ([]models.Store, error) {
+	rows, err := r.db.Query(`
+SELECT DISTINCT s.id, s.site_code, s.store_name, s.currency, s.timezone, s.status
+FROM role_assignment r
+INNER JOIN store s ON s.id = r.store_id
+WHERE r.user_id = ?
+ORDER BY s.store_name ASC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stores := make([]models.Store, 0)
+	for rows.Next() {
+		var store models.Store
+		if err := rows.Scan(&store.ID, &store.SiteCode, &store.StoreName, &store.Currency, &store.Timezone, &store.Status); err != nil {
+			return nil, err
+		}
+		stores = append(stores, store)
+	}
+
+	return stores, nil
+}
+
 func (r *Repository) GetCurrentGoal(storeID string) (models.AdGoal, error) {
 	row := r.db.QueryRow(`
 SELECT id, agent_type, store_id, site_code, goal_name, acos_target, daily_budget_cap,
@@ -252,6 +276,189 @@ WHERE id = ?`, goalID)
 	}
 
 	return goal, nil
+}
+
+func (r *Repository) ListGoals(storeID string) ([]models.AdGoal, error) {
+	rows, err := r.db.Query(`
+SELECT id, agent_type, store_id, site_code, goal_name, acos_target, daily_budget_cap,
+       risk_profile, auto_approve_enabled, auto_approve_budget_delta_pct, auto_approve_bid_delta_pct,
+       status, effective_from, updated_by
+FROM agent_goal
+WHERE store_id = ?
+ORDER BY updated_at DESC`, storeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	goals := make([]models.AdGoal, 0)
+	for rows.Next() {
+		goal, scanErr := scanGoalRow(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		goals = append(goals, goal)
+	}
+
+	return goals, nil
+}
+
+func (r *Repository) CreateGoal(storeID, userID string, input models.UpdateGoalRequest) (models.AdGoal, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	siteCode := "US"
+	_ = tx.QueryRow(`SELECT site_code FROM store WHERE id = ? LIMIT 1`, storeID).Scan(&siteCode)
+
+	_, err = tx.Exec(`
+UPDATE agent_goal
+SET status = 'paused',
+    updated_by = ?,
+    updated_at = UTC_TIMESTAMP()
+WHERE store_id = ? AND status = 'active'`, userID, storeID)
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+
+	goalID := newID("goal")
+	_, err = tx.Exec(`
+INSERT INTO agent_goal (
+  id, agent_type, store_id, site_code, goal_name, acos_target, daily_budget_cap,
+  risk_profile, auto_approve_enabled, auto_approve_budget_delta_pct, auto_approve_bid_delta_pct,
+  status, effective_from, updated_by, created_at, updated_at
+)
+VALUES (?, 'ad_agent', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', UTC_TIMESTAMP(), ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+		goalID, storeID, siteCode, input.GoalName, input.ACOSTarget, input.DailyBudgetCap,
+		input.RiskProfile, input.AutoApproveEnabled, input.AutoApproveBudgetDeltaPct, input.AutoApproveBidDeltaPct,
+		userID)
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+
+	row := tx.QueryRow(`
+SELECT id, agent_type, store_id, site_code, goal_name, acos_target, daily_budget_cap,
+       risk_profile, auto_approve_enabled, auto_approve_budget_delta_pct, auto_approve_bid_delta_pct,
+       status, effective_from, updated_by
+FROM agent_goal
+WHERE id = ?`, goalID)
+	goal, err := scanGoalRow(row)
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+
+	if err := r.insertAuditLogTx(tx, userID, "goal_create", "agent_goal", goalID, "success", `{"source":"api"}`); err != nil {
+		return models.AdGoal{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return models.AdGoal{}, err
+	}
+
+	return goal, nil
+}
+
+func (r *Repository) UpdateGoalByID(storeID, userID, goalID string, input models.UpdateGoalRequest) (models.AdGoal, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.Exec(`
+UPDATE agent_goal
+SET goal_name = ?,
+    acos_target = ?,
+    daily_budget_cap = ?,
+    risk_profile = ?,
+    auto_approve_enabled = ?,
+    auto_approve_budget_delta_pct = ?,
+    auto_approve_bid_delta_pct = ?,
+    effective_from = UTC_TIMESTAMP(),
+    updated_by = ?,
+    updated_at = UTC_TIMESTAMP()
+WHERE id = ? AND store_id = ?`,
+		input.GoalName, input.ACOSTarget, input.DailyBudgetCap, input.RiskProfile,
+		input.AutoApproveEnabled, input.AutoApproveBudgetDeltaPct, input.AutoApproveBidDeltaPct,
+		userID, goalID, storeID)
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+	if affected == 0 {
+		return models.AdGoal{}, ErrNotFound
+	}
+
+	row := tx.QueryRow(`
+SELECT id, agent_type, store_id, site_code, goal_name, acos_target, daily_budget_cap,
+       risk_profile, auto_approve_enabled, auto_approve_budget_delta_pct, auto_approve_bid_delta_pct,
+       status, effective_from, updated_by
+FROM agent_goal
+WHERE id = ?`, goalID)
+	goal, err := scanGoalRow(row)
+	if err != nil {
+		return models.AdGoal{}, err
+	}
+
+	if err := r.insertAuditLogTx(tx, userID, "goal_update", "agent_goal", goalID, "success", `{"source":"api"}`); err != nil {
+		return models.AdGoal{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return models.AdGoal{}, err
+	}
+
+	return goal, nil
+}
+
+func (r *Repository) DeleteGoalByID(storeID, userID, goalID string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.Exec(`
+UPDATE agent_goal
+SET status = 'paused',
+    updated_by = ?,
+    updated_at = UTC_TIMESTAMP()
+WHERE id = ? AND store_id = ?`, userID, goalID, storeID)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+
+	if err := r.insertAuditLogTx(tx, userID, "goal_delete", "agent_goal", goalID, "success", `{"source":"api"}`); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *Repository) ListSuggestions(filter SuggestionFilter) (models.SuggestionsPayload, error) {
